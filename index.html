@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Backgammon-Liga</title>
+<meta name="theme-color" content="#123027" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,800&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+:root{
+  --board:#123027; --board-deep:#0C211B; --bone:#EFE6D2; --bone-dim:#B9AF98;
+  --oxblood:#A63A2C; --ochre:#D7A03C; --line:rgba(239,230,210,0.16);
+}
+*,*::before,*::after{box-sizing:border-box}
+body{
+  margin:0; padding:26px 18px 56px; min-height:100vh;
+  font-family:'IBM Plex Sans',system-ui,sans-serif; color:var(--bone);
+  background:var(--board);
+  background-image:radial-gradient(120% 80% at 50% 0%, rgba(255,255,255,0.05), transparent 60%);
+}
+.wrap{max-width:1080px;margin:0 auto}
+h1{font-family:'Fraunces',Georgia,serif;font-weight:800;font-size:clamp(30px,7vw,52px);line-height:.95;letter-spacing:-.02em;margin:0}
+.sub{color:var(--bone-dim);font-size:14px;margin:8px 0 0;max-width:52ch}
+.strip{display:block;width:100%;height:22px;margin:20px 0 26px}
+.grid{display:grid;grid-template-columns:1.15fr .85fr;gap:20px;align-items:start}
+@media(max-width:820px){.grid{grid-template-columns:1fr}}
+.panel{background:var(--board-deep);border:1px solid var(--line);border-radius:4px;padding:18px}
+.panel+.panel{margin-top:20px}
+.eyebrow{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--ochre);margin:0 0 14px}
+.row{display:grid;grid-template-columns:34px 1fr auto;align-items:center;gap:12px;padding:11px 0;border-top:1px solid var(--line)}
+.row:first-of-type{border-top:none}
+.pname{font-family:'Fraunces',Georgia,serif;font-size:19px;font-weight:600}
+.meta{font-size:12px;color:var(--bone-dim);font-family:'IBM Plex Mono',monospace;margin-top:2px}
+.score{font-family:'IBM Plex Mono',monospace;font-size:22px;font-weight:600;text-align:right}
+label{display:block;font-size:12px;color:var(--bone-dim);margin:0 0 5px}
+.field{margin-bottom:13px}
+input,select{width:100%;background:rgba(239,230,210,.06);border:1px solid var(--line);border-radius:3px;color:var(--bone);font-family:inherit;font-size:16px;padding:10px}
+select{appearance:none;cursor:pointer}
+input:focus-visible,select:focus-visible,button:focus-visible{outline:2px solid var(--ochre);outline-offset:2px}
+.btn{width:100%;background:var(--oxblood);color:var(--bone);border:none;border-radius:3px;padding:12px 14px;font-size:16px;font-weight:600;font-family:inherit;cursor:pointer}
+.btn:hover{background:#BF4534}
+.btn:disabled{background:rgba(239,230,210,.12);color:var(--bone-dim);cursor:not-allowed}
+.ghost{background:none;border:1px solid var(--line);color:var(--bone-dim);border-radius:3px;padding:5px 10px;font-size:12px;font-family:'IBM Plex Mono',monospace;cursor:pointer}
+.ghost:hover{color:var(--bone);border-color:var(--bone-dim)}
+.inline{display:flex;gap:8px}.inline input{flex:1}.inline .btn{width:auto;padding:10px 16px}
+.preview{font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--ochre);margin:0 0 13px;min-height:18px}
+.empty{color:var(--bone-dim);font-size:14px;margin:0}
+.note{color:var(--bone-dim);font-size:12px;line-height:1.55;margin:14px 0 0}
+.err{color:#E9A79C;font-size:13px;margin:8px 0 0}
+ul.log{list-style:none;margin:0;padding:0;max-height:340px;overflow-y:auto}
+ul.log li{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 0;border-top:1px solid var(--line);font-size:14px}
+ul.log li:first-child{border-top:none}
+.d{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--ochre);white-space:nowrap}
+.tag{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--bone-dim)}
+.gate{max-width:380px;margin:12vh auto 0}
+.chip{display:inline-block;font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--board);background:var(--ochre);padding:3px 8px;border-radius:2px;margin-bottom:16px}
+.bar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:22px}
+.hidden{display:none}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<!-- ======================================================================
+     HIER DEINE DREI WERTE EINTRAGEN (zwischen den Anführungszeichen)
+     ====================================================================== -->
+<script>
+  const SUPABASE_URL  = "https://swhmiipxeynplkjenncz.supabase.co";
+  const SUPABASE_KEY  = "sb_publishable_vnM2nAZ0MCafE09VyUw8dQ_IGxmcwrB";
+  const PASSWORT      = "doppelsechs";
+</script>
+<!-- ====================================================================== -->
+
+<div class="wrap">
+
+  <div id="gate" class="gate">
+    <span class="chip">Geschlossene Runde</span>
+    <h1>Backgammon-Liga</h1>
+    <p class="sub">Passwort eingeben, dann geht's zur Tabelle.</p>
+    <div style="height:20px"></div>
+    <div class="field">
+      <label for="pw">Passwort</label>
+      <input id="pw" type="password" autocomplete="current-password" />
+    </div>
+    <button class="btn" id="gateBtn">Öffnen</button>
+    <p class="err hidden" id="gateErr">Passt nicht. Nochmal versuchen.</p>
+  </div>
+
+  <div id="app" class="hidden">
+    <h1>Backgammon-Liga</h1>
+    <p class="sub">Elo-Wertung: Was der Gewinner bekommt, verliert der Verlierer. Wer stärker eingeschätzt ist, gewinnt weniger und verliert mehr. Gammon zählt doppelt, Backgammon vierfach. Alle starten bei 1000.</p>
+    <svg class="strip" viewBox="0 0 100 22" preserveAspectRatio="none" aria-hidden="true" id="strip"></svg>
+
+    <div class="grid">
+      <div>
+        <div class="panel">
+          <p class="eyebrow">Tabelle</p>
+          <div id="table"><p class="empty">Wird geladen …</p></div>
+        </div>
+        <div class="panel">
+          <p class="eyebrow">Verlauf</p>
+          <div id="log"><p class="empty">Wird geladen …</p></div>
+        </div>
+      </div>
+
+      <div>
+        <div class="panel">
+          <p class="eyebrow">Partie eintragen</p>
+          <div class="field">
+            <label for="win">Gewonnen hat</label>
+            <select id="win"><option value="">Spieler wählen</option></select>
+          </div>
+          <div class="field">
+            <label for="los">Verloren hat</label>
+            <select id="los"><option value="">Spieler wählen</option></select>
+          </div>
+          <div class="field">
+            <label for="mult">Höhe des Sieges</label>
+            <select id="mult">
+              <option value="1">Einfach — 1 Punkt</option>
+              <option value="2">Gammon — 2 Punkte</option>
+              <option value="4">Backgammon — 4 Punkte</option>
+            </select>
+          </div>
+          <p class="preview" id="preview"></p>
+          <button class="btn" id="addMatch" disabled>Partie eintragen</button>
+        </div>
+
+        <div class="panel">
+          <p class="eyebrow">Spieler anlegen</p>
+          <div class="inline">
+            <input id="newName" placeholder="Name" autocomplete="off" />
+            <button class="btn" id="addPlayer">Anlegen</button>
+          </div>
+          <p class="err hidden" id="msg"></p>
+          <p class="note">Wer neu dazukommt, startet bei 1000 und nimmt niemandem etwas weg. Ob jemand 3 oder 300 Partien gespielt hat, spielt für die Tabelle keine Rolle — nur gegen wen.</p>
+        </div>
+
+        <div class="bar">
+          <span class="tag" id="stand">—</span>
+          <button class="ghost" id="reload">Neu laden</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
+
+const START = 1000, K = 24;
+const $ = (id) => document.getElementById(id);
+const db = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+let players = [], matches = [], ratings = {}, stats = {}, deltas = {};
+
+// Punkte-Strip zeichnen
+$("strip").innerHTML = Array.from({length:24}, (_,i) => {
+  const w = 100/24, x = i*w;
+  return `<polygon points="${x},0 ${x+w},0 ${x+w/2},22" fill="${i%2?'#D7A03C':'#A63A2C'}" opacity="${i%2?0.75:0.95}"/>`;
+}).join("");
+
+// --- Passwort ---
+function unlock(){
+  $("gate").classList.add("hidden");
+  $("app").classList.remove("hidden");
+  try { sessionStorage.setItem("bgl-ok","1"); } catch(e){}
+  load();
+  setInterval(load, 15000);
+}
+$("gateBtn").onclick = () => {
+  if ($("pw").value === PASSWORT) unlock();
+  else $("gateErr").classList.remove("hidden");
+};
+$("pw").onkeydown = (e) => { if (e.key === "Enter") $("gateBtn").click(); };
+try { if (sessionStorage.getItem("bgl-ok") === "1") unlock(); } catch(e){}
+
+// --- Elo ---
+const expected = (a,b) => 1 / (1 + Math.pow(10, (b-a)/400));
+
+function replay(){
+  ratings = {}; stats = {}; deltas = {};
+  players.forEach(p => { ratings[p.id] = START; stats[p.id] = {w:0,l:0}; });
+  [...matches].sort((a,b) => new Date(a.created_at) - new Date(b.created_at)).forEach(m => {
+    if (ratings[m.winner] === undefined || ratings[m.loser] === undefined) return;
+    const d = Math.round(K * (m.mult||1) * (1 - expected(ratings[m.winner], ratings[m.loser])));
+    ratings[m.winner] += d; ratings[m.loser] -= d;
+    stats[m.winner].w++; stats[m.loser].l++;
+    deltas[m.id] = d;
+  });
+}
+
+const nameOf = (id) => (players.find(p => p.id === id) || {}).name || "—";
+
+// --- Laden & Zeichnen ---
+async function load(){
+  const [pRes, mRes] = await Promise.all([
+    db.from("players").select("*"),
+    db.from("matches").select("*")
+  ]);
+  if (pRes.error || mRes.error){
+    $("stand").textContent = "keine Verbindung";
+    return;
+  }
+  players = pRes.data; matches = mRes.data;
+  replay(); render();
+  $("stand").textContent = "Stand " + new Date().toLocaleTimeString("de-DE",{hour:"2-digit",minute:"2-digit"});
+}
+
+function render(){
+  const rows = players
+    .map(p => ({...p, rating: ratings[p.id], ...stats[p.id]}))
+    .sort((a,b) => b.rating - a.rating || a.name.localeCompare(b.name));
+
+  $("table").innerHTML = rows.length === 0
+    ? `<p class="empty">Noch niemand dabei. Rechts den ersten Spieler anlegen.</p>`
+    : rows.map((p,i) => `
+      <div class="row">
+        <svg width="30" height="34" viewBox="0 0 30 34" aria-hidden="true">
+          <polygon points="0,0 30,0 15,34" fill="${(i+1)%2 ? '#A63A2C' : '#D7A03C'}" opacity="0.9"/>
+          <text x="15" y="14" text-anchor="middle" font-family="'IBM Plex Mono',monospace" font-size="12" font-weight="600" fill="#0C211B">${i+1}</text>
+        </svg>
+        <div>
+          <div class="pname"></div>
+          <div class="meta">${p.w} S · ${p.l} N · ${p.w+p.l} Partien</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <span class="score">${p.rating}</span>
+          ${p.w+p.l === 0 ? `<button class="ghost" data-delp="${p.id}">löschen</button>` : ``}
+        </div>
+      </div>`).join("");
+  // Namen sicher einsetzen (kein HTML aus Eingaben)
+  $("table").querySelectorAll(".pname").forEach((el,i) => el.textContent = rows[i].name);
+
+  const log = [...matches].sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
+  $("log").innerHTML = log.length === 0
+    ? `<p class="empty">Noch keine Partie eingetragen.</p>`
+    : `<ul class="log">` + log.map(m => `
+        <li>
+          <span class="mtxt"></span>
+          <span style="display:flex;align-items:center;gap:10px">
+            <span class="d">+${deltas[m.id] ?? 0} / −${deltas[m.id] ?? 0}</span>
+            <button class="ghost" data-delm="${m.id}">löschen</button>
+          </span>
+        </li>`).join("") + `</ul>`;
+  $("log").querySelectorAll(".mtxt").forEach((el,i) => {
+    const m = log[i];
+    el.textContent = `${nameOf(m.winner)} schlägt ${nameOf(m.loser)}` + (m.mult>1 ? (m.mult===4 ? "  BACKGAMMON" : "  GAMMON") : "");
+  });
+
+  ["win","los"].forEach(id => {
+    const sel = $(id), keep = sel.value;
+    sel.innerHTML = `<option value="">Spieler wählen</option>` +
+      rows.map(p => `<option value="${p.id}"></option>`).join("");
+    [...sel.options].slice(1).forEach((o,i) => o.textContent = rows[i].name);
+    sel.value = keep;
+  });
+  updatePreview();
+}
+
+function updatePreview(){
+  const w = $("win").value, l = $("los").value, m = Number($("mult").value);
+  const ok = w && l && w !== l;
+  $("addMatch").disabled = !ok;
+  $("preview").textContent = ok
+    ? `Ergibt +${Math.round(K*m*(1-expected(ratings[w] ?? START, ratings[l] ?? START)))} für ${nameOf(w)}, entsprechend weniger für ${nameOf(l)}`
+    : "";
+}
+["win","los","mult"].forEach(id => $(id).onchange = updatePreview);
+
+// --- Schreiben ---
+function say(text){ const el = $("msg"); el.textContent = text; el.classList.toggle("hidden", !text); }
+
+$("addPlayer").onclick = async () => {
+  const name = $("newName").value.trim();
+  if (!name) return;
+  const { error } = await db.from("players").insert({ name });
+  if (error) return say(error.code === "23505" ? "Den Namen gibt es schon." : "Konnte nicht speichern. Nochmal versuchen.");
+  $("newName").value = ""; say(""); load();
+};
+$("newName").onkeydown = (e) => { if (e.key === "Enter") $("addPlayer").click(); };
+
+$("addMatch").onclick = async () => {
+  const winner = $("win").value, loser = $("los").value, mult = Number($("mult").value);
+  if (!winner || !loser || winner === loser) return;
+  const { error } = await db.from("matches").insert({ winner, loser, mult });
+  if (error) return say("Konnte nicht speichern. Nochmal versuchen.");
+  $("win").value = ""; $("los").value = ""; $("mult").value = "1"; say(""); load();
+};
+
+document.addEventListener("click", async (e) => {
+  const dm = e.target.dataset?.delm, dp = e.target.dataset?.delp;
+  if (dm){ await db.from("matches").delete().eq("id", dm); load(); }
+  if (dp){ await db.from("players").delete().eq("id", dp); load(); }
+});
+
+$("reload").onclick = load;
+</script>
+</body>
+</html>
