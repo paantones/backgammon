@@ -54,6 +54,9 @@ ul.log li{display:flex;align-items:center;justify-content:space-between;gap:10px
 ul.log li:first-child{border-top:none}
 .d{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--ochre);white-space:nowrap}
 .tag{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--bone-dim)}
+.dt{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--bone-dim);margin-right:8px}
+ul.log li.edit{display:block}
+ul.log li.edit .btn{width:auto;padding:9px 16px}
 .gate{max-width:380px;margin:12vh auto 0}
 .chip{display:inline-block;font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--board);background:var(--ochre);padding:3px 8px;border-radius:2px;margin-bottom:16px}
 .bar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:22px}
@@ -155,6 +158,7 @@ const $ = (id) => document.getElementById(id);
 const db = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 let players = [], matches = [], ratings = {}, stats = {}, deltas = {};
+let editingId = null;
 
 // Punkte-Strip zeichnen
 $("strip").innerHTML = Array.from({length:24}, (_,i) => {
@@ -235,20 +239,54 @@ function render(){
   $("table").querySelectorAll(".pname").forEach((el,i) => el.textContent = rows[i].name);
 
   const log = [...matches].sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
-  $("log").innerHTML = log.length === 0
-    ? `<p class="empty">Noch keine Partie eingetragen.</p>`
-    : `<ul class="log">` + log.map(m => `
+  if (log.length === 0){
+    $("log").innerHTML = `<p class="empty">Noch keine Partie eingetragen.</p>`;
+  } else {
+    $("log").innerHTML = `<ul class="log">` + log.map(m => m.id === editingId ? `
+        <li class="edit">
+          <div class="field"><label>Gewonnen hat</label><select id="ew"></select></div>
+          <div class="field"><label>Verloren hat</label><select id="el"></select></div>
+          <div class="field"><label>Höhe des Sieges</label>
+            <select id="em">
+              <option value="1">Einfach — 1 Punkt</option>
+              <option value="2">Gammon — 2 Punkte</option>
+              <option value="3">Backgammon — 3 Punkte</option>
+            </select>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="btn" data-savem="${m.id}">Speichern</button>
+            <button class="ghost" data-cancel="1">Abbrechen</button>
+          </div>
+        </li>` : `
         <li>
-          <span class="mtxt"></span>
-          <span style="display:flex;align-items:center;gap:10px">
-            <span class="d">+${deltas[m.id] ?? 0} / −${deltas[m.id] ?? 0}</span>
+          <span><span class="dt"></span><span class="mtxt"></span></span>
+          <span style="display:flex;align-items:center;gap:8px">
+            <span class="d">±${deltas[m.id] ?? 0}</span>
+            <button class="ghost" data-editm="${m.id}">ändern</button>
             <button class="ghost" data-delm="${m.id}">löschen</button>
           </span>
         </li>`).join("") + `</ul>`;
-  $("log").querySelectorAll(".mtxt").forEach((el,i) => {
-    const m = log[i];
-    el.textContent = `${nameOf(m.winner)} schlägt ${nameOf(m.loser)}` + (m.mult>1 ? (m.mult>=3 ? "  BACKGAMMON" : "  GAMMON") : "");
-  });
+
+    $("log").querySelectorAll("li").forEach((li,i) => {
+      const m = log[i];
+      const txt = li.querySelector(".mtxt");
+      if (txt){
+        li.querySelector(".dt").textContent = new Date(m.created_at)
+          .toLocaleDateString("de-DE",{day:"2-digit",month:"2-digit"});
+        txt.textContent = `${nameOf(m.winner)} schlägt ${nameOf(m.loser)}`
+          + (m.mult>1 ? (m.mult>=3 ? "  BACKGAMMON" : "  GAMMON") : "");
+        return;
+      }
+      ["ew","el"].forEach(id => {
+        const sel = li.querySelector("#"+id);
+        sel.innerHTML = rows.map(p => `<option value="${p.id}"></option>`).join("");
+        [...sel.options].forEach((o,j) => o.textContent = rows[j].name);
+      });
+      li.querySelector("#ew").value = m.winner;
+      li.querySelector("#el").value = m.loser;
+      li.querySelector("#em").value = String(m.mult || 1);
+    });
+  }
 
   ["win","los"].forEach(id => {
     const sel = $(id), keep = sel.value;
@@ -292,6 +330,19 @@ $("addMatch").onclick = async () => {
 
 document.addEventListener("click", async (e) => {
   const dm = e.target.dataset?.delm, dp = e.target.dataset?.delp;
+  const ed = e.target.dataset?.editm, sv = e.target.dataset?.savem, cn = e.target.dataset?.cancel;
+  if (ed){ editingId = ed; render(); return; }
+  if (cn){ editingId = null; render(); return; }
+  if (sv){
+    const w = $("ew").value, l = $("el").value, mu = Number($("em").value);
+    if (!w || !l || w === l){ say("Gewinner und Verlierer müssen verschieden sein."); return; }
+    const { error } = await db.from("matches").update({ winner: w, loser: l, mult: mu }).eq("id", sv);
+    editingId = null;
+    if (error) say("Ändern hat nicht geklappt.");
+    else say("");
+    load();
+    return;
+  }
   if (dm){ await db.from("matches").delete().eq("id", dm); load(); }
   if (dp){ await db.from("players").delete().eq("id", dp); load(); }
 });
