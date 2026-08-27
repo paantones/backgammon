@@ -90,7 +90,7 @@ ul.log li:first-child{border-top:none}
 
   <div id="app" class="hidden">
     <h1>Backgammon-Liga</h1>
-    <p class="sub">Elo-Wertung: Was der Gewinner bekommt, verliert der Verlierer. Wer stärker eingeschätzt ist, gewinnt weniger und verliert mehr. Gammon zählt doppelt, Backgammon vierfach. Alle starten bei 1000.</p>
+    <p class="sub">Elo-Wertung: Was der Gewinner bekommt, verliert der Verlierer. Wer stärker eingeschätzt ist, gewinnt weniger und verliert mehr. Gammon zählt doppelt, Backgammon dreifach. Alle starten bei 1000.</p>
     <svg class="strip" viewBox="0 0 100 22" preserveAspectRatio="none" aria-hidden="true" id="strip"></svg>
 
     <div class="grid">
@@ -121,7 +121,7 @@ ul.log li:first-child{border-top:none}
             <select id="mult">
               <option value="1">Einfach — 1 Punkt</option>
               <option value="2">Gammon — 2 Punkte</option>
-              <option value="4">Backgammon — 4 Punkte</option>
+              <option value="3">Backgammon — 3 Punkte</option>
             </select>
           </div>
           <p class="preview" id="preview"></p>
@@ -247,7 +247,7 @@ function render(){
         </li>`).join("") + `</ul>`;
   $("log").querySelectorAll(".mtxt").forEach((el,i) => {
     const m = log[i];
-    el.textContent = `${nameOf(m.winner)} schlägt ${nameOf(m.loser)}` + (m.mult>1 ? (m.mult===4 ? "  BACKGAMMON" : "  GAMMON") : "");
+    el.textContent = `${nameOf(m.winner)} schlägt ${nameOf(m.loser)}` + (m.mult>1 ? (m.mult>=3 ? "  BACKGAMMON" : "  GAMMON") : "");
   });
 
   ["win","los"].forEach(id => {
