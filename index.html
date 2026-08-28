@@ -195,7 +195,7 @@ function unlock(){
   $("app").classList.remove("hidden");
   try { sessionStorage.setItem("bgl-ok","1"); } catch(e){}
   load();
-  setInterval(load, 15000);
+  setInterval(() => load(2), 30000);
 }
 $("gateBtn").onclick = () => {
   if ($("pw").value === PASSWORT) unlock();
@@ -222,19 +222,46 @@ function replay(){
 const nameOf = (id) => (players.find(p => p.id === id) || {}).name || "—";
 
 // --- Laden & Zeichnen ---
-async function load(){
-  const [pRes, mRes] = await Promise.all([
-    db.from("players").select("*"),
-    db.from("matches").select("*")
-  ]);
+function fail(msg){
+  $("table").innerHTML = `<p class="err">Keine Verbindung zur Datenbank: ${msg}</p>`;
+  $("stand").textContent = "keine Verbindung";
+}
+
+function retry(tries, msg){
+  if (tries > 1){
+    $("stand").textContent = "verbinde …";
+    setTimeout(() => load(tries - 1), 1500);
+  } else {
+    fail(msg);
+  }
+}
+
+let busy = false;
+
+async function load(tries = 4){
+  if (busy) return;
+  busy = true;
+  let pRes, mRes;
+  try {
+    pRes = await db.from("players").select("*");
+    mRes = await db.from("matches").select("*");
+  } catch (e) {
+    busy = false;
+    retry(tries, e && e.message ? e.message : String(e));
+    return;
+  }
+  busy = false;
   if (pRes.error || mRes.error){
-    $("stand").textContent = "keine Verbindung";
+    const e = pRes.error || mRes.error;
+    retry(tries, `${e.message}${e.hint ? " — " + e.hint : ""}`);
     return;
   }
   players = pRes.data; matches = mRes.data;
-  replay(); render();
+  refresh();
   $("stand").textContent = "Stand " + new Date().toLocaleTimeString("de-DE",{hour:"2-digit",minute:"2-digit"});
 }
+
+function refresh(){ replay(); render(); }
 
 function render(){
   const rows = players
@@ -337,18 +364,20 @@ function say(text){ const el = $("msg"); el.textContent = text; el.classList.tog
 $("addPlayer").onclick = async () => {
   const name = $("newName").value.trim();
   if (!name) return;
-  const { error } = await db.from("players").insert({ name });
+  const { data, error } = await db.from("players").insert({ name }).select();
   if (error) return say(error.code === "23505" ? "Den Namen gibt es schon." : "Konnte nicht speichern. Nochmal versuchen.");
-  $("newName").value = ""; say(""); load();
+  if (data && data[0]) players.push(data[0]);
+  $("newName").value = ""; say(""); refresh();
 };
 $("newName").onkeydown = (e) => { if (e.key === "Enter") $("addPlayer").click(); };
 
 $("addMatch").onclick = async () => {
   const winner = $("win").value, loser = $("los").value, mult = Number($("mult").value);
   if (!winner || !loser || winner === loser) return;
-  const { error } = await db.from("matches").insert({ winner, loser, mult });
+  const { data, error } = await db.from("matches").insert({ winner, loser, mult }).select();
   if (error) return say("Konnte nicht speichern. Nochmal versuchen.");
-  $("win").value = ""; $("los").value = ""; $("mult").value = "1"; say(""); load();
+  if (data && data[0]) matches.push(data[0]);
+  $("win").value = ""; $("los").value = ""; $("mult").value = "1"; say(""); refresh();
 };
 
 document.addEventListener("click", async (e) => {
@@ -361,16 +390,26 @@ document.addEventListener("click", async (e) => {
     if (!w || !l || w === l){ say("Gewinner und Verlierer müssen verschieden sein."); return; }
     const { error } = await db.from("matches").update({ winner: w, loser: l, mult: mu }).eq("id", sv);
     editingId = null;
-    if (error) say("Ändern hat nicht geklappt.");
-    else say("");
-    load();
+    if (error){ say("Ändern hat nicht geklappt."); load(); return; }
+    say("");
+    const m = matches.find(x => x.id === sv);
+    if (m){ m.winner = w; m.loser = l; m.mult = mu; }
+    refresh();
     return;
   }
-  if (dm){ await db.from("matches").delete().eq("id", dm); load(); }
-  if (dp){ await db.from("players").delete().eq("id", dp); load(); }
+  if (dm){
+    const { error } = await db.from("matches").delete().eq("id", dm);
+    if (error){ say("Löschen hat nicht geklappt."); return; }
+    matches = matches.filter(x => x.id !== dm); refresh();
+  }
+  if (dp){
+    const { error } = await db.from("players").delete().eq("id", dp);
+    if (error){ say("Löschen hat nicht geklappt."); return; }
+    players = players.filter(x => x.id !== dp); refresh();
+  }
 });
 
-$("reload").onclick = load;
+$("reload").onclick = () => load();
 </script>
 </body>
 </html>
