@@ -193,7 +193,7 @@ let editingId = null;
 function unlock(){
   $("gate").classList.add("hidden");
   $("app").classList.remove("hidden");
-  try { sessionStorage.setItem("bgl-ok","1"); } catch(e){}
+  try { localStorage.setItem("bgl-pw", PASSWORT); } catch(e){}
   load();
   setInterval(() => load(2), 30000);
 }
@@ -202,7 +202,7 @@ $("gateBtn").onclick = () => {
   else $("gateErr").classList.remove("hidden");
 };
 $("pw").onkeydown = (e) => { if (e.key === "Enter") $("gateBtn").click(); };
-try { if (sessionStorage.getItem("bgl-ok") === "1") unlock(); } catch(e){}
+try { if (localStorage.getItem("bgl-pw") === PASSWORT) unlock(); } catch(e){}
 
 // --- Elo ---
 const expected = (a,b) => 1 / (1 + Math.pow(10, (b-a)/400));
