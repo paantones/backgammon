@@ -194,8 +194,12 @@ function unlock(){
   $("gate").classList.add("hidden");
   $("app").classList.remove("hidden");
   try { localStorage.setItem("bgl-pw", PASSWORT); } catch(e){}
-  load();
-  setInterval(() => load(2), 30000);
+  $("stand").textContent = "verbinde …";
+  setTimeout(() => load(), 400);
+  setInterval(() => load(3), 30000);
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) load(3);
+  });
 }
 $("gateBtn").onclick = () => {
   if ($("pw").value === PASSWORT) unlock();
@@ -222,7 +226,7 @@ function replay(){
 const nameOf = (id) => (players.find(p => p.id === id) || {}).name || "—";
 
 // --- Laden & Zeichnen ---
-function withTimeout(p, ms = 8000){
+function withTimeout(p, ms = 15000){
   return Promise.race([
     Promise.resolve(p),
     new Promise((_, rej) => setTimeout(() => rej(new Error("Zeitüberschreitung — Datenbank antwortet nicht")), ms))
@@ -237,7 +241,7 @@ function fail(msg){
 function retry(tries, msg){
   if (tries > 1){
     $("stand").textContent = "verbinde …";
-    setTimeout(() => load(tries - 1), 1500);
+    setTimeout(() => load(tries - 1), (7 - tries) * 1000);
   } else {
     fail(msg);
   }
@@ -245,7 +249,7 @@ function retry(tries, msg){
 
 let busy = false;
 
-async function load(tries = 4){
+async function load(tries = 6){
   if (busy) return;
   busy = true;
   let pRes, mRes;
