@@ -222,6 +222,13 @@ function replay(){
 const nameOf = (id) => (players.find(p => p.id === id) || {}).name || "—";
 
 // --- Laden & Zeichnen ---
+function withTimeout(p, ms = 8000){
+  return Promise.race([
+    Promise.resolve(p),
+    new Promise((_, rej) => setTimeout(() => rej(new Error("Zeitüberschreitung — Datenbank antwortet nicht")), ms))
+  ]);
+}
+
 function fail(msg){
   $("table").innerHTML = `<p class="err">Keine Verbindung zur Datenbank: ${msg}</p>`;
   $("stand").textContent = "keine Verbindung";
@@ -243,8 +250,8 @@ async function load(tries = 4){
   busy = true;
   let pRes, mRes;
   try {
-    pRes = await db.from("players").select("*");
-    mRes = await db.from("matches").select("*");
+    pRes = await withTimeout(db.from("players").select("*"));
+    mRes = await withTimeout(db.from("matches").select("*"));
   } catch (e) {
     busy = false;
     retry(tries, e && e.message ? e.message : String(e));
@@ -364,8 +371,10 @@ function say(text){ const el = $("msg"); el.textContent = text; el.classList.tog
 $("addPlayer").onclick = async () => {
   const name = $("newName").value.trim();
   if (!name) return;
-  const { data, error } = await db.from("players").insert({ name }).select();
-  if (error) return say(error.code === "23505" ? "Den Namen gibt es schon." : "Konnte nicht speichern. Nochmal versuchen.");
+  let data, error;
+  try { ({ data, error } = await withTimeout(db.from("players").insert({ name }).select())); }
+  catch (e) { return say(e.message); }
+  if (error) return say(error.code === "23505" ? "Den Namen gibt es schon." : "Konnte nicht speichern: " + error.message);
   if (data && data[0]) players.push(data[0]);
   $("newName").value = ""; say(""); refresh();
 };
@@ -374,8 +383,10 @@ $("newName").onkeydown = (e) => { if (e.key === "Enter") $("addPlayer").click();
 $("addMatch").onclick = async () => {
   const winner = $("win").value, loser = $("los").value, mult = Number($("mult").value);
   if (!winner || !loser || winner === loser) return;
-  const { data, error } = await db.from("matches").insert({ winner, loser, mult }).select();
-  if (error) return say("Konnte nicht speichern. Nochmal versuchen.");
+  let data, error;
+  try { ({ data, error } = await withTimeout(db.from("matches").insert({ winner, loser, mult }).select())); }
+  catch (e) { return say(e.message); }
+  if (error) return say("Konnte nicht speichern: " + error.message);
   if (data && data[0]) matches.push(data[0]);
   $("win").value = ""; $("los").value = ""; $("mult").value = "1"; say(""); refresh();
 };
@@ -388,7 +399,9 @@ document.addEventListener("click", async (e) => {
   if (sv){
     const w = $("ew").value, l = $("el").value, mu = Number($("em").value);
     if (!w || !l || w === l){ say("Gewinner und Verlierer müssen verschieden sein."); return; }
-    const { error } = await db.from("matches").update({ winner: w, loser: l, mult: mu }).eq("id", sv);
+    let error;
+    try { ({ error } = await withTimeout(db.from("matches").update({ winner: w, loser: l, mult: mu }).eq("id", sv))); }
+    catch (e) { say(e.message); editingId = null; render(); return; }
     editingId = null;
     if (error){ say("Ändern hat nicht geklappt."); load(); return; }
     say("");
@@ -398,18 +411,22 @@ document.addEventListener("click", async (e) => {
     return;
   }
   if (dm){
-    const { error } = await db.from("matches").delete().eq("id", dm);
-    if (error){ say("Löschen hat nicht geklappt."); return; }
+    let error;
+    try { ({ error } = await withTimeout(db.from("matches").delete().eq("id", dm))); }
+    catch (err) { return say(err.message); }
+    if (error){ say("Löschen hat nicht geklappt: " + error.message); return; }
     matches = matches.filter(x => x.id !== dm); refresh();
   }
   if (dp){
-    const { error } = await db.from("players").delete().eq("id", dp);
-    if (error){ say("Löschen hat nicht geklappt."); return; }
+    let error;
+    try { ({ error } = await withTimeout(db.from("players").delete().eq("id", dp))); }
+    catch (err) { return say(err.message); }
+    if (error){ say("Löschen hat nicht geklappt: " + error.message); return; }
     players = players.filter(x => x.id !== dp); refresh();
   }
 });
 
-$("reload").onclick = () => load();
+$("reload").onclick = () => { busy = false; load(); };
 </script>
 </body>
 </html>
