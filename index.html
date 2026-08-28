@@ -32,12 +32,11 @@ body{
 .head-in{max-width:1080px;margin:0 auto;padding:26px 18px 22px}
 .head h1{color:var(--pearl)}
 .head .sub{color:var(--wood)}
-.grid,.bar{padding:0 18px}
+.stack,.bar{padding:0 18px}
 h1{font-family:'Fraunces',Georgia,serif;font-weight:800;font-size:clamp(30px,7vw,52px);line-height:.95;letter-spacing:-.02em;margin:0}
 .sub{color:var(--ink-soft);font-size:14px;margin:8px 0 0;max-width:52ch}
 .strip{display:block;width:100%;height:48px;margin:0 0 26px}
-.grid{display:grid;grid-template-columns:1.15fr .85fr;gap:20px;align-items:start}
-@media(max-width:820px){.grid{grid-template-columns:1fr}}
+.stack{max-width:620px;margin:0 auto}
 .panel{background:var(--wood-panel);border:1px solid var(--line);border-radius:4px;padding:18px}
 .panel+.panel{margin-top:20px}
 .eyebrow{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-faint);margin:0 0 14px}
@@ -107,60 +106,57 @@ ul.log li.edit .btn{width:auto;padding:9px 16px}
     <div class="head">
       <div class="head-in">
         <h1>Backgammon-Liga</h1>
-        <p class="sub">Elo-Wertung: Was der Gewinner bekommt, verliert der Verlierer. Wer stärker eingeschätzt ist, gewinnt weniger und verliert mehr. Gammon zählt doppelt, Backgammon dreifach. Alle starten bei 1000.</p>
+        <p class="sub">Elo-Wertung: Was der*die Gewinner*in bekommt, verliert der*die Verlierer*in. Wer stärker eingeschätzt ist, gewinnt weniger und verliert mehr. Gammon zählt doppelt, Backgammon dreifach. Alle starten bei 1000.</p>
       </div>
     </div>
     <svg class="strip" viewBox="0 0 380 48" preserveAspectRatio="none" aria-hidden="true" id="strip"></svg>
 
-    <div class="grid">
-      <div>
-        <div class="panel">
-          <p class="eyebrow">Tabelle</p>
-          <div id="table"><p class="empty">Wird geladen …</p></div>
-        </div>
-        <div class="panel">
-          <p class="eyebrow">Verlauf</p>
-          <div id="log"><p class="empty">Wird geladen …</p></div>
-        </div>
+    <div class="stack">
+      <div class="panel">
+        <p class="eyebrow">Tabelle</p>
+        <div id="table"><p class="empty">Wird geladen …</p></div>
       </div>
 
-      <div>
-        <div class="panel">
-          <p class="eyebrow">Partie eintragen</p>
-          <div class="field">
-            <label for="win">Gewonnen hat</label>
-            <select id="win"><option value="">Spieler wählen</option></select>
-          </div>
-          <div class="field">
-            <label for="los">Verloren hat</label>
-            <select id="los"><option value="">Spieler wählen</option></select>
-          </div>
-          <div class="field">
-            <label for="mult">Höhe des Sieges</label>
-            <select id="mult">
-              <option value="1">Einfach — 1 Punkt</option>
-              <option value="2">Gammon — 2 Punkte</option>
-              <option value="3">Backgammon — 3 Punkte</option>
-            </select>
-          </div>
-          <p class="preview" id="preview"></p>
-          <button class="btn" id="addMatch" disabled>Partie eintragen</button>
+      <div class="panel">
+        <p class="eyebrow">Partie eintragen</p>
+        <div class="field">
+          <label for="win">Gewonnen hat</label>
+          <select id="win"><option value="">Spieler*in wählen</option></select>
         </div>
+        <div class="field">
+          <label for="los">Verloren hat</label>
+          <select id="los"><option value="">Spieler*in wählen</option></select>
+        </div>
+        <div class="field">
+          <label for="mult">Höhe des Sieges</label>
+          <select id="mult">
+            <option value="1">Einfach — 1 Punkt</option>
+            <option value="2">Gammon — 2 Punkte</option>
+            <option value="3">Backgammon — 3 Punkte</option>
+          </select>
+        </div>
+        <p class="preview" id="preview"></p>
+        <button class="btn" id="addMatch" disabled>Partie eintragen</button>
+      </div>
 
-        <div class="panel">
-          <p class="eyebrow">Spieler anlegen</p>
-          <div class="inline">
-            <input id="newName" placeholder="Name" autocomplete="off" />
-            <button class="btn" id="addPlayer">Anlegen</button>
-          </div>
-          <p class="err hidden" id="msg"></p>
-          <p class="note">Wer neu dazukommt, startet bei 1000 und nimmt niemandem etwas weg. Ob jemand 3 oder 300 Partien gespielt hat, spielt für die Tabelle keine Rolle — nur gegen wen.</p>
-        </div>
+      <div class="panel">
+        <p class="eyebrow">Verlauf</p>
+        <div id="log"><p class="empty">Wird geladen …</p></div>
+      </div>
 
-        <div class="bar">
-          <span class="tag" id="stand">—</span>
-          <button class="ghost" id="reload">Neu laden</button>
+      <div class="panel">
+        <p class="eyebrow">Spieler*in anlegen</p>
+        <div class="inline">
+          <input id="newName" placeholder="Name" autocomplete="off" />
+          <button class="btn" id="addPlayer">Anlegen</button>
         </div>
+        <p class="err hidden" id="msg"></p>
+        <p class="note">Wer neu dazukommt, startet bei 1000 und nimmt niemandem etwas weg. Ob jemand 3 oder 300 Partien gespielt hat, spielt für die Tabelle keine Rolle — nur gegen wen.</p>
+      </div>
+
+      <div class="bar">
+        <span class="tag" id="stand">—</span>
+        <button class="ghost" id="reload">Neu laden</button>
       </div>
     </div>
   </div>
@@ -280,7 +276,7 @@ function render(){
     .sort((a,b) => b.rating - a.rating || a.name.localeCompare(b.name));
 
   $("table").innerHTML = rows.length === 0
-    ? `<p class="empty">Noch niemand dabei. Rechts den ersten Spieler anlegen.</p>`
+    ? `<p class="empty">Noch niemand dabei. Unten die erste Spieler*in anlegen.</p>`
     : rows.map((p,i) => `
       <div class="row">
         <svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true">
@@ -351,7 +347,7 @@ function render(){
 
   ["win","los"].forEach(id => {
     const sel = $(id), keep = sel.value;
-    sel.innerHTML = `<option value="">Spieler wählen</option>` +
+    sel.innerHTML = `<option value="">Spieler*in wählen</option>` +
       rows.map(p => `<option value="${p.id}"></option>`).join("");
     [...sel.options].slice(1).forEach((o,i) => o.textContent = rows[i].name);
     sel.value = keep;
@@ -402,7 +398,7 @@ document.addEventListener("click", async (e) => {
   if (cn){ editingId = null; render(); return; }
   if (sv){
     const w = $("ew").value, l = $("el").value, mu = Number($("em").value);
-    if (!w || !l || w === l){ say("Gewinner und Verlierer müssen verschieden sein."); return; }
+    if (!w || !l || w === l){ say("Gewinner*in und Verlierer*in müssen verschieden sein."); return; }
     let error;
     try { ({ error } = await withTimeout(db.from("matches").update({ winner: w, loser: l, mult: mu }).eq("id", sv))); }
     catch (e) { say(e.message); editingId = null; render(); return; }
