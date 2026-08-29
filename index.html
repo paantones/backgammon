@@ -65,6 +65,17 @@ ul.log li{display:flex;align-items:center;justify-content:space-between;gap:10px
 ul.log li:first-child{border-top:none}
 .d{font-family:'IBM Plex Mono',monospace;font-size:12px;color:#3E2D1E;white-space:nowrap}
 .tag{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft)}
+details.alt summary{list-style:none;cursor:pointer;display:flex;justify-content:space-between;align-items:center;
+  font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-faint)}
+details.alt summary::-webkit-details-marker{display:none}
+details.alt summary::after{content:"+";font-size:17px;letter-spacing:0}
+details.alt[open] summary::after{content:"−"}
+details.alt[open] summary{margin-bottom:14px}
+.arow{display:grid;grid-template-columns:24px 1fr auto;gap:10px;align-items:center;padding:9px 0;border-top:1px solid var(--line)}
+.arow:first-of-type{border-top:none}
+.arank{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--ink-soft)}
+.aname{font-family:'Fraunces',Georgia,serif;font-size:17px}
+.apts{font-family:'IBM Plex Mono',monospace;font-size:18px;font-weight:600}
 .dt{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft);margin-right:8px}
 ul.log li.edit{display:block}
 ul.log li.edit .btn{width:auto;padding:9px 16px}
@@ -153,6 +164,32 @@ ul.log li.edit .btn{width:auto;padding:9px 16px}
         <p class="err hidden" id="msg"></p>
         <p class="note">Wer neu dazukommt, startet bei 1000 und nimmt niemandem etwas weg. Ob jemand 3 oder 300 Partien gespielt hat, spielt für die Tabelle keine Rolle — nur gegen wen.</p>
       </div>
+
+      <details class="panel alt">
+        <summary>Nebenwertung: nur Pluspunkte</summary>
+        <p class="note" style="margin:0 0 12px">Sieg bringt 1, 2 oder 3 Punkte, je nach Höhe. Wer verliert, bekommt nichts abgezogen — wer viel spielt, sammelt mehr.</p>
+        <div id="altPlus"><p class="empty">Noch keine Partie.</p></div>
+      </details>
+
+      <details class="panel alt">
+        <summary>Nebenwertung: Plus und Minus</summary>
+        <p class="note" style="margin:0 0 12px">Wer gewinnt, bekommt 1, 2 oder 3 Punkte, wer verliert, verliert genauso viele. Ohne Elo, also unabhängig davon, wie stark die Gegnerin oder der Gegner ist.</p>
+        <div id="altPm"><p class="empty">Noch keine Partie.</p></div>
+      </details>
+
+      <details class="panel alt">
+        <summary>Direkter Vergleich</summary>
+        <p class="note" style="margin:0 0 12px">Nur die Partien der beiden gegeneinander, gezählt mit 1, 2 oder 3 Punkten pro Sieg.</p>
+        <div class="field">
+          <label for="h2hA">Erste Person</label>
+          <select id="h2hA"><option value="">Spieler*in wählen</option></select>
+        </div>
+        <div class="field">
+          <label for="h2hB">Zweite Person</label>
+          <select id="h2hB"><option value="">Spieler*in wählen</option></select>
+        </div>
+        <div id="h2h"><p class="empty">Zwei Personen wählen.</p></div>
+      </details>
 
       <div class="bar">
         <span class="tag" id="stand">—</span>
@@ -268,7 +305,76 @@ async function load(tries = 6){
   $("stand").textContent = "Stand " + new Date().toLocaleTimeString("de-DE",{hour:"2-digit",minute:"2-digit"});
 }
 
-function refresh(){ replay(); render(); }
+function refresh(){ replay(); render(); renderAlt(); renderH2H(); }
+
+function renderH2H(){
+  const box = $("h2h");
+  if (!box) return;
+  const a = $("h2hA").value, b = $("h2hB").value;
+  if (!a || !b || a === b){
+    box.innerHTML = `<p class="empty">Zwei Personen wählen.</p>`;
+    return;
+  }
+  const duell = matches.filter(m =>
+    (m.winner === a && m.loser === b) || (m.winner === b && m.loser === a));
+  if (duell.length === 0){
+    box.innerHTML = `<p class="empty">Die beiden haben noch nicht gegeneinander gespielt.</p>`;
+    return;
+  }
+  let pa = 0, pb = 0, wa = 0, wb = 0;
+  duell.forEach(m => {
+    const v = m.mult || 1;
+    if (m.winner === a){ pa += v; wa++; } else { pb += v; wb++; }
+  });
+  box.innerHTML = `
+    <div class="arow">
+      <span class="arank">1</span>
+      <span><span class="aname" data-n="a"></span><br><span class="meta">${wa} Siege</span></span>
+      <span class="apts">${pa}</span>
+    </div>
+    <div class="arow">
+      <span class="arank">2</span>
+      <span><span class="aname" data-n="b"></span><br><span class="meta">${wb} Siege</span></span>
+      <span class="apts">${pb}</span>
+    </div>
+    <p class="note">${duell.length} ${duell.length === 1 ? "Partie" : "Partien"} gegeneinander.</p>`;
+  box.querySelector('[data-n="a"]').textContent = nameOf(a);
+  box.querySelector('[data-n="b"]').textContent = nameOf(b);
+}
+
+function simpleTable(withMinus){
+  const pts = {}, games = {};
+  players.forEach(p => { pts[p.id] = 0; games[p.id] = 0; });
+  matches.forEach(m => {
+    if (pts[m.winner] === undefined || pts[m.loser] === undefined) return;
+    const v = m.mult || 1;
+    pts[m.winner] += v;
+    if (withMinus) pts[m.loser] -= v;
+    games[m.winner]++; games[m.loser]++;
+  });
+  return players
+    .map(p => ({ name: p.name, pts: pts[p.id], games: games[p.id] }))
+    .sort((a,b) => b.pts - a.pts || a.name.localeCompare(b.name));
+}
+
+function renderAlt(){
+  [["altPlus", false], ["altPm", true]].forEach(([id, minus]) => {
+    const rows = simpleTable(minus);
+    const box = $(id);
+    if (!box) return;
+    if (rows.length === 0 || matches.length === 0){
+      box.innerHTML = `<p class="empty">Noch keine Partie.</p>`;
+      return;
+    }
+    box.innerHTML = rows.map((r,i) => `
+      <div class="arow">
+        <span class="arank">${i+1}</span>
+        <span><span class="aname"></span><br><span class="meta">${r.games} Partien</span></span>
+        <span class="apts">${r.pts > 0 && minus ? "+" : ""}${String(r.pts).replace("-", "−")}</span>
+      </div>`).join("");
+    box.querySelectorAll(".aname").forEach((el,i) => el.textContent = rows[i].name);
+  });
+}
 
 function render(){
   const rows = players
@@ -345,7 +451,7 @@ function render(){
     });
   }
 
-  ["win","los"].forEach(id => {
+  ["win","los","h2hA","h2hB"].forEach(id => {
     const sel = $(id), keep = sel.value;
     sel.innerHTML = `<option value="">Spieler*in wählen</option>` +
       rows.map(p => `<option value="${p.id}"></option>`).join("");
@@ -364,6 +470,7 @@ function updatePreview(){
     : "";
 }
 ["win","los","mult"].forEach(id => $(id).onchange = updatePreview);
+["h2hA","h2hB"].forEach(id => $(id).onchange = renderH2H);
 
 // --- Schreiben ---
 function say(text){ const el = $("msg"); el.textContent = text; el.classList.toggle("hidden", !text); }
