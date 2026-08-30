@@ -437,8 +437,10 @@ function render(){
       const m = log[i];
       const txt = li.querySelector(".mtxt");
       if (txt){
-        li.querySelector(".dt").textContent = new Date(m.created_at)
-          .toLocaleDateString("de-DE",{day:"2-digit",month:"2-digit"});
+        const d = new Date(m.created_at);
+        li.querySelector(".dt").textContent =
+          d.toLocaleDateString("de-DE",{day:"2-digit",month:"2-digit"}) + " " +
+          d.toLocaleTimeString("de-DE",{hour:"2-digit",minute:"2-digit"});
         txt.textContent = `${nameOf(m.winner)} schlägt ${nameOf(m.loser)}`
           + (m.mult>1 ? (m.mult>=3 ? "  BACKGAMMON" : "  GAMMON") : "");
         return;
