@@ -173,7 +173,7 @@ ul.log li.edit .btn{width:auto;padding:9px 16px}
 
       <details class="panel alt">
         <summary>Nebenwertung: Plus und Minus</summary>
-        <p class="note" style="margin:0 0 12px">Wer gewinnt, bekommt 1, 2 oder 3 Punkte, wer verliert, verliert genauso viele. Ohne Elo, also unabhängig davon, wie stark die Gegnerin oder der Gegner ist.</p>
+        <p class="note" style="margin:0 0 12px">Wer gewinnt, bekommt 1, 2 oder 3 Punkte, wer verliert, verliert genauso viele. Ohne Elo, also unabhängig davon, wie stark der*die Gegner*in ist.</p>
         <div id="altPm"><p class="empty">Noch keine Partie.</p></div>
       </details>
 
@@ -256,6 +256,9 @@ function replay(){
   });
 }
 
+const partien = (n) => `${n} ${n === 1 ? "Partie" : "Partien"}`;
+const siege = (n) => `${n} ${n === 1 ? "Sieg" : "Siege"}`;
+
 const nameOf = (id) => (players.find(p => p.id === id) || {}).name || "—";
 
 // --- Laden & Zeichnen ---
@@ -329,15 +332,15 @@ function renderH2H(){
   box.innerHTML = `
     <div class="arow">
       <span class="arank">1</span>
-      <span><span class="aname" data-n="a"></span><br><span class="meta">${wa} Siege</span></span>
+      <span><span class="aname" data-n="a"></span><br><span class="meta">${siege(wa)}</span></span>
       <span class="apts">${pa}</span>
     </div>
     <div class="arow">
       <span class="arank">2</span>
-      <span><span class="aname" data-n="b"></span><br><span class="meta">${wb} Siege</span></span>
+      <span><span class="aname" data-n="b"></span><br><span class="meta">${siege(wb)}</span></span>
       <span class="apts">${pb}</span>
     </div>
-    <p class="note">${duell.length} ${duell.length === 1 ? "Partie" : "Partien"} gegeneinander.</p>`;
+    <p class="note">${partien(duell.length)} gegeneinander.</p>`;
   box.querySelector('[data-n="a"]').textContent = nameOf(a);
   box.querySelector('[data-n="b"]').textContent = nameOf(b);
 }
@@ -369,7 +372,7 @@ function renderAlt(){
     box.innerHTML = rows.map((r,i) => `
       <div class="arow">
         <span class="arank">${i+1}</span>
-        <span><span class="aname"></span><br><span class="meta">${r.games} Partien</span></span>
+        <span><span class="aname"></span><br><span class="meta">${partien(r.games)}</span></span>
         <span class="apts">${r.pts > 0 && minus ? "+" : ""}${String(r.pts).replace("-", "−")}</span>
       </div>`).join("");
     box.querySelectorAll(".aname").forEach((el,i) => el.textContent = rows[i].name);
@@ -391,7 +394,7 @@ function render(){
         </svg>
         <div>
           <div class="pname"></div>
-          <div class="meta">${p.w} S · ${p.l} N · ${p.w+p.l} Partien</div>
+          <div class="meta">${p.w} S · ${p.l} N · ${partien(p.w+p.l)}</div>
         </div>
         <div style="display:flex;align-items:center;gap:10px">
           <span class="score">${p.rating}</span>
