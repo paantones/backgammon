@@ -117,7 +117,7 @@ ul.log li.edit .btn{width:auto;padding:9px 16px}
     <div class="head">
       <div class="head-in">
         <h1>Backgammon-Liga</h1>
-        <p class="sub">Elo-Wertung: Was der*die Gewinner*in bekommt, verliert der*die Verlierer*in. Wer stärker eingeschätzt ist, gewinnt weniger und verliert mehr. Gammon zählt doppelt, Backgammon dreifach. Alle starten bei 1000.</p>
+        <p class="sub">Jeder Sieg bringt Punkte: einfach 1, Gammon 2, Backgammon 3. Wer verliert, bekommt nichts abgezogen. Elo und Plus-Minus stehen unten als Nebenwertungen.</p>
       </div>
     </div>
     <svg class="strip" viewBox="0 0 380 48" preserveAspectRatio="none" aria-hidden="true" id="strip"></svg>
@@ -166,9 +166,9 @@ ul.log li.edit .btn{width:auto;padding:9px 16px}
       </div>
 
       <details class="panel alt">
-        <summary>Nebenwertung: nur Pluspunkte</summary>
-        <p class="note" style="margin:0 0 12px">Sieg bringt 1, 2 oder 3 Punkte, je nach Höhe. Wer verliert, bekommt nichts abgezogen — wer viel spielt, sammelt mehr.</p>
-        <div id="altPlus"><p class="empty">Noch keine Partie.</p></div>
+        <summary>Nebenwertung: Elo</summary>
+        <p class="note" style="margin:0 0 12px">Alle starten bei 1000. Was der*die Gewinner*in bekommt, verliert der*die Verlierer*in — wer stärker eingeschätzt ist, gewinnt weniger und verliert mehr. Aussagekräftig erst mit vielen Partien.</p>
+        <div id="altElo"><p class="empty">Noch keine Partie.</p></div>
       </details>
 
       <details class="panel alt">
@@ -206,7 +206,7 @@ const START = 1000, K = 24;
 const $ = (id) => document.getElementById(id);
 const db = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-let players = [], matches = [], ratings = {}, stats = {}, deltas = {};
+let players = [], matches = [], ratings = {}, stats = {}, deltas = {}, plus = {}, pm = {};
 let editingId = null;
 
 // Punkte-Strip zeichnen
@@ -245,13 +245,15 @@ try { if (localStorage.getItem("bgl-pw") === PASSWORT) unlock(); } catch(e){}
 const expected = (a,b) => 1 / (1 + Math.pow(10, (b-a)/400));
 
 function replay(){
-  ratings = {}; stats = {}; deltas = {};
-  players.forEach(p => { ratings[p.id] = START; stats[p.id] = {w:0,l:0}; });
+  ratings = {}; stats = {}; deltas = {}; plus = {}; pm = {};
+  players.forEach(p => { ratings[p.id] = START; stats[p.id] = {w:0,l:0}; plus[p.id] = 0; pm[p.id] = 0; });
   [...matches].sort((a,b) => new Date(a.created_at) - new Date(b.created_at)).forEach(m => {
     if (ratings[m.winner] === undefined || ratings[m.loser] === undefined) return;
     const d = Math.round(K * (m.mult||1) * (1 - expected(ratings[m.winner], ratings[m.loser])));
     ratings[m.winner] += d; ratings[m.loser] -= d;
     stats[m.winner].w++; stats[m.loser].l++;
+    const v = m.mult || 1;
+    plus[m.winner] += v; pm[m.winner] += v; pm[m.loser] -= v;
     deltas[m.id] = d;
   });
 }
@@ -345,26 +347,21 @@ function renderH2H(){
   box.querySelector('[data-n="b"]').textContent = nameOf(b);
 }
 
-function simpleTable(withMinus){
-  const pts = {}, games = {};
-  players.forEach(p => { pts[p.id] = 0; games[p.id] = 0; });
-  matches.forEach(m => {
-    if (pts[m.winner] === undefined || pts[m.loser] === undefined) return;
-    const v = m.mult || 1;
-    pts[m.winner] += v;
-    if (withMinus) pts[m.loser] -= v;
-    games[m.winner]++; games[m.loser]++;
-  });
+function altRows(wert){
   return players
-    .map(p => ({ name: p.name, pts: pts[p.id], games: games[p.id] }))
-    .sort((a,b) => b.pts - a.pts || a.name.localeCompare(b.name));
+    .map(p => ({
+      name: p.name,
+      games: stats[p.id] ? stats[p.id].w + stats[p.id].l : 0,
+      val: wert === "elo" ? ratings[p.id] : pm[p.id]
+    }))
+    .sort((a,b) => b.val - a.val || a.name.localeCompare(b.name));
 }
 
 function renderAlt(){
-  [["altPlus", false], ["altPm", true]].forEach(([id, minus]) => {
-    const rows = simpleTable(minus);
+  [["altElo", "elo"], ["altPm", "pm"]].forEach(([id, wert]) => {
     const box = $(id);
     if (!box) return;
+    const rows = altRows(wert);
     if (rows.length === 0 || matches.length === 0){
       box.innerHTML = `<p class="empty">Noch keine Partie.</p>`;
       return;
@@ -373,7 +370,7 @@ function renderAlt(){
       <div class="arow">
         <span class="arank">${i+1}</span>
         <span><span class="aname"></span><br><span class="meta">${partien(r.games)}</span></span>
-        <span class="apts">${r.pts > 0 && minus ? "+" : ""}${String(r.pts).replace("-", "−")}</span>
+        <span class="apts">${wert === "pm" && r.val > 0 ? "+" : ""}${String(r.val).replace("-", "−")}</span>
       </div>`).join("");
     box.querySelectorAll(".aname").forEach((el,i) => el.textContent = rows[i].name);
   });
@@ -381,8 +378,8 @@ function renderAlt(){
 
 function render(){
   const rows = players
-    .map(p => ({...p, rating: ratings[p.id], ...stats[p.id]}))
-    .sort((a,b) => b.rating - a.rating || a.name.localeCompare(b.name));
+    .map(p => ({...p, rating: ratings[p.id], pts: plus[p.id], ...stats[p.id]}))
+    .sort((a,b) => b.pts - a.pts || b.rating - a.rating || a.name.localeCompare(b.name));
 
   $("table").innerHTML = rows.length === 0
     ? `<p class="empty">Noch niemand dabei. Unten die erste Spieler*in anlegen.</p>`
@@ -397,7 +394,7 @@ function render(){
           <div class="meta">${p.w} S · ${p.l} N · ${partien(p.w+p.l)}</div>
         </div>
         <div style="display:flex;align-items:center;gap:10px">
-          <span class="score">${p.rating}</span>
+          <span class="score">${p.pts}</span>
           ${p.w+p.l === 0 ? `<button class="ghost" data-delp="${p.id}">löschen</button>` : ``}
         </div>
       </div>`).join("");
@@ -471,7 +468,7 @@ function updatePreview(){
   const ok = w && l && w !== l;
   $("addMatch").disabled = !ok;
   $("preview").textContent = ok
-    ? `Ergibt +${Math.round(K*m*(1-expected(ratings[w] ?? START, ratings[l] ?? START)))} für ${nameOf(w)}, entsprechend weniger für ${nameOf(l)}`
+    ? `Ergibt ${m} ${m === 1 ? "Punkt" : "Punkte"} für ${nameOf(w)}`
     : "";
 }
 ["win","los","mult"].forEach(id => $(id).onchange = updatePreview);
