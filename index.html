@@ -178,6 +178,12 @@ ul.log li.edit .btn{width:auto;padding:9px 16px}
       </details>
 
       <details class="panel alt">
+        <summary>Nebenwertung: Punkte pro Partie</summary>
+        <p class="note" style="margin:0 0 12px">Gewonnene Punkte geteilt durch die Zahl der Partien, mal 10. Belohnt gute Quoten statt vieler Abende — wer noch nicht gespielt hat, steht unten ohne Wert.</p>
+        <div id="altAvg"><p class="empty">Noch keine Partie.</p></div>
+      </details>
+
+      <details class="panel alt">
         <summary>Direkter Vergleich</summary>
         <p class="note" style="margin:0 0 12px">Nur die Partien der beiden gegeneinander, gezählt mit 1, 2 oder 3 Punkten pro Sieg.</p>
         <div class="field">
@@ -349,16 +355,30 @@ function renderH2H(){
 
 function altRows(wert){
   return players
-    .map(p => ({
-      name: p.name,
-      games: stats[p.id] ? stats[p.id].w + stats[p.id].l : 0,
-      val: wert === "elo" ? ratings[p.id] : pm[p.id]
-    }))
-    .sort((a,b) => b.val - a.val || a.name.localeCompare(b.name));
+    .map(p => {
+      const games = stats[p.id] ? stats[p.id].w + stats[p.id].l : 0;
+      let val;
+      if (wert === "elo") val = ratings[p.id];
+      else if (wert === "pm") val = pm[p.id];
+      else val = games ? (plus[p.id] / games) * 10 : null;
+      return { name: p.name, games, val };
+    })
+    .sort((a,b) => {
+      if (a.val === null && b.val === null) return a.name.localeCompare(b.name);
+      if (a.val === null) return 1;
+      if (b.val === null) return -1;
+      return b.val - a.val || a.name.localeCompare(b.name);
+    });
+}
+
+function altText(wert, r){
+  if (r.val === null) return "—";
+  if (wert === "avg") return r.val.toLocaleString("de-DE", {minimumFractionDigits:1, maximumFractionDigits:1});
+  return `${wert === "pm" && r.val > 0 ? "+" : ""}${String(r.val).replace("-", "−")}`;
 }
 
 function renderAlt(){
-  [["altElo", "elo"], ["altPm", "pm"]].forEach(([id, wert]) => {
+  [["altElo", "elo"], ["altPm", "pm"], ["altAvg", "avg"]].forEach(([id, wert]) => {
     const box = $(id);
     if (!box) return;
     const rows = altRows(wert);
@@ -370,7 +390,7 @@ function renderAlt(){
       <div class="arow">
         <span class="arank">${i+1}</span>
         <span><span class="aname"></span><br><span class="meta">${partien(r.games)}</span></span>
-        <span class="apts">${wert === "pm" && r.val > 0 ? "+" : ""}${String(r.val).replace("-", "−")}</span>
+        <span class="apts">${altText(wert, r)}</span>
       </div>`).join("");
     box.querySelectorAll(".aname").forEach((el,i) => el.textContent = rows[i].name);
   });
