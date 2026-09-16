@@ -73,6 +73,7 @@ details.alt[open] summary::after{content:"−"}
 details.alt[open] summary{margin-bottom:14px}
 .arow{display:grid;grid-template-columns:24px 1fr auto;gap:10px;align-items:center;padding:9px 0;border-top:1px solid var(--line)}
 .arow:first-of-type{border-top:none}
+.devline{margin:6px 18px 0;text-align:right;font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--ink-soft);opacity:.75}
 .arank{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--ink-soft)}
 .aname{font-family:'Fraunces',Georgia,serif;font-size:17px}
 .apts{font-family:'IBM Plex Mono',monospace;font-size:18px;font-weight:600}
@@ -201,6 +202,7 @@ ul.log li.edit .btn{width:auto;padding:9px 16px}
         <span class="tag" id="stand">—</span>
         <button class="ghost" id="reload">Neu laden</button>
       </div>
+      <p class="devline" id="devLine"></p>
     </div>
   </div>
 </div>
@@ -213,6 +215,17 @@ const $ = (id) => document.getElementById(id);
 const db = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 let players = [], matches = [], ratings = {}, stats = {}, deltas = {}, plus = {}, pm = {};
+
+const deviceId = (() => {
+  try {
+    let id = localStorage.getItem("bgl-device");
+    if (!id){
+      id = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random());
+      localStorage.setItem("bgl-device", id);
+    }
+    return id;
+  } catch (e) { return "unbekannt"; }
+})();
 let editingId = null;
 
 // Punkte-Strip zeichnen
@@ -314,6 +327,23 @@ async function load(tries = 6){
   players = pRes.data; matches = mRes.data;
   refresh();
   $("stand").textContent = "Stand " + new Date().toLocaleTimeString("de-DE",{hour:"2-digit",minute:"2-digit"});
+}
+
+function deviceName(id){
+  const mine = matches.filter(m => m.device === id);
+  if (mine.length < 5) return "unbekannt";
+  const dabei = {};
+  mine.forEach(m => {
+    dabei[m.winner] = (dabei[m.winner] || 0) + 1;
+    dabei[m.loser]  = (dabei[m.loser]  || 0) + 1;
+  });
+  const rang = Object.entries(dabei).sort((a,b) => b[1] - a[1]);
+  const erste  = rang[0] ? rang[0][1] / mine.length : 0;
+  const zweite = rang[1] ? rang[1][1] / mine.length : 0;
+  const klar = (erste >= 0.82 && zweite <= 0.55)
+            || (erste >  0.60 && zweite <= 0.40)
+            || (erste >= 0.95 && zweite <= 0.85);
+  return klar ? nameOf(rang[0][0]) : "unbekannt";
 }
 
 function refresh(){ replay(); render(); renderAlt(); renderH2H(); }
@@ -481,6 +511,8 @@ function render(){
     sel.value = keep;
   });
   updatePreview();
+  const dl = $("devLine");
+  if (dl) dl.textContent = deviceName(deviceId);
 }
 
 function updatePreview(){
@@ -513,7 +545,7 @@ $("addMatch").onclick = async () => {
   const winner = $("win").value, loser = $("los").value, mult = Number($("mult").value);
   if (!winner || !loser || winner === loser) return;
   let data, error;
-  try { ({ data, error } = await withTimeout(db.from("matches").insert({ winner, loser, mult }).select())); }
+  try { ({ data, error } = await withTimeout(db.from("matches").insert({ winner, loser, mult, device: deviceId }).select())); }
   catch (e) { return say(e.message); }
   if (error) return say("Konnte nicht speichern: " + error.message);
   if (data && data[0]) matches.push(data[0]);
