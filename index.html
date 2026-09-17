@@ -365,9 +365,19 @@ function deviceOwner(id){
 
 const ich = () => deviceOwner(deviceId);
 
+function erkannteGeraete(){
+  const zuordnung = {};
+  new Set(matches.map(m => m.device).filter(Boolean)).forEach(g => {
+    const besitzer = deviceOwner(g);
+    if (besitzer) zuordnung[besitzer] = g;
+  });
+  return zuordnung;
+}
+
 async function schnueffeln(zielId){
   const mich = ich();
   if (!mich || !zielId || zielId === mich) return;
+  if (!erkannteGeraete()[zielId]) return;   // Ziel gehört noch keinem Gerät
   const zeile = { actor: mich, target: zielId, created_at: new Date().toISOString() };
   spyLog.push(zeile);
   try { await withTimeout(db.from("spy").insert({ actor: mich, target: zielId })); } catch (e) { /* stumm */ }
