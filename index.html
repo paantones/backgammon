@@ -156,7 +156,7 @@ ul.log li.edit .btn{width:auto;padding:9px 16px}
         </div>
         <svg id="rankChart" viewBox="0 0 360 230" role="img" aria-label="Platzierungen im Zeitverlauf"></svg>
         <div id="chartLegend" class="legend"></div>
-        <p class="note">Jede Partie rückt die Kurven um einen Schritt. Oben ist Platz eins.</p>
+        <p class="note">Jede Partie rückt die Kurven um einen Schritt. Oben ist Platz eins. Angezeigt werden nur Spieler*innen mit 10 oder mehr Partien.</p>
       </div>
 
       <div class="panel">
@@ -552,25 +552,16 @@ function zeichneAktivitaet(){
   const svg = $("actChart"), sel = $("actWho");
   if (!svg) return;
 
-  const dabei = qualifiziert();
   const keep = sel.value;
-  const liste = players.filter(p => dabei.includes(p.id));
   sel.innerHTML = `<option value="">Alle</option>` +
-    liste.map(p => `<option value="${p.id}"></option>`).join("");
-  [...sel.options].slice(1).forEach((o,i) => o.textContent = liste[i].name);
-  sel.value = dabei.includes(keep) ? keep : "";
-
-  if (dabei.length === 0){
-    svg.innerHTML = `<text x="8" y="30" font-size="13" fill="#54402D">Ab ${MIN_SPIELE} Partien pro Person geht es hier los.</text>`;
-    return;
-  }
+    players.map(p => `<option value="${p.id}"></option>`).join("");
+  [...sel.options].slice(1).forEach((o,i) => o.textContent = players[i].name);
+  sel.value = keep;
 
   const wen = sel.value;
   const eimer = new Array(24).fill(0);
   matches.forEach(m => {
-    if (wen){
-      if (m.winner !== wen && m.loser !== wen) return;
-    } else if (!dabei.includes(m.winner) && !dabei.includes(m.loser)) return;
+    if (wen && m.winner !== wen && m.loser !== wen) return;
     eimer[stunden(m)]++;
   });
   const max = Math.max(...eimer);
@@ -623,8 +614,7 @@ function fakten(){
       if (h >= 22 || h < 5) zaehl(nacht, id);
       if (h >= 5 && h < 10) zaehl(frueh, id);
     });
-    const paar = [m.winner, m.loser].sort().join("|");
-    zaehl(paare, paar);
+    zaehl(paare, [m.winner, m.loser].sort().join("|"));
     if (m.device) zaehl(eingetragen, m.device);
   });
 
