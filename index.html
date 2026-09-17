@@ -156,7 +156,10 @@ ul.log li.edit .btn{width:auto;padding:9px 16px}
         </div>
         <svg id="rankChart" viewBox="0 0 360 230" role="img" aria-label="Platzierungen im Zeitverlauf"></svg>
         <div id="chartLegend" class="legend"></div>
-        <p class="note">Jede Partie rückt die Kurven um einen Schritt. Oben ist Platz eins. Angezeigt werden nur Spieler*innen mit 10 oder mehr Partien.</p>
+        <p class="note">Jede Partie rückt die Kurven um einen Schritt. Oben ist Platz eins.</p>
+        <p class="eyebrow" style="margin:18px 0 6px">Und in Zahlen</p>
+        <svg id="valueChart" viewBox="0 0 360 230" role="img" aria-label="Punktestände im Zeitverlauf"></svg>
+        <p class="note">Dieselben Partien, aber der tatsächliche Stand statt der Platzierung. Angezeigt werden nur Spieler*innen mit 10 oder mehr Partien.</p>
       </div>
 
       <div class="panel">
@@ -502,7 +505,7 @@ function verlaufsRaenge(modus){
                        : modus === "avg" ? (spiele[id] ? punkte[id] / spiele[id] * 10 : 0)
                        : punkte[id];
     const liste = [...aktiv].sort((a,b) => wert(b) - wert(a) || nameOf(a).localeCompare(nameOf(b)));
-    liste.forEach((id, platz) => reihen[id].push({ x: idx + 1, r: platz + 1 }));
+    liste.forEach((id, platz) => reihen[id].push({ x: idx + 1, r: platz + 1, v: wert(id) }));
   });
   return { reihen, laenge: chrono.length, aktiv: [...aktiv] };
 }
@@ -515,6 +518,7 @@ function zeichneChart(){
   if (laenge < 2 || aktiv.length < 2){
     svg.innerHTML = `<text x="12" y="30" font-size="13" fill="#54402D">Ab ${MIN_SPIELE} Partien pro Person geht es hier los.</text>`;
     leg.innerHTML = "";
+    zeichneWerte(modus, reihen, laenge, aktiv.length < 1 ? [] : aktiv);
     return;
   }
   const W = 360, H = 230, L = 26, R = 12, T = 14, B = 26;
@@ -540,10 +544,50 @@ function zeichneChart(){
     g += `<circle cx="${px(last.x).toFixed(1)}" cy="${py(last.r).toFixed(1)}" r="3" fill="${farbe}"/>`;
   });
   svg.innerHTML = g;
+  zeichneWerte(modus, reihen, laenge, aktiv);
 
   leg.innerHTML = aktiv.map((id,i) =>
     `<span><i style="background:${FARBEN[i % FARBEN.length]}"></i><b class="ln" data-id="${id}"></b></span>`).join("");
   leg.querySelectorAll(".ln").forEach(el => el.textContent = nameOf(el.dataset.id));
+}
+
+function zeichneWerte(modus, reihen, laenge, aktiv){
+  const svg = $("valueChart");
+  if (!svg) return;
+  if (laenge < 2 || aktiv.length < 1){
+    svg.innerHTML = `<text x="12" y="30" font-size="13" fill="#54402D">Ab ${MIN_SPIELE} Partien pro Person geht es hier los.</text>`;
+    return;
+  }
+  const alle = aktiv.flatMap(id => reihen[id].map(p => p.v));
+  let lo = Math.min(...alle), hi = Math.max(...alle);
+  if (hi === lo){ hi = lo + 1; }
+  const spanne = hi - lo;
+  lo -= spanne * 0.08; hi += spanne * 0.08;
+
+  const W = 360, H = 230, L = 34, R = 12, T = 12, B = 26;
+  const px = (x) => L + (x - 1) / Math.max(1, laenge - 1) * (W - L - R);
+  const py = (v) => T + (hi - v) / (hi - lo) * (H - T - B);
+  const fmt = (v) => modus === "avg" ? v.toFixed(1).replace(".", ",") : String(Math.round(v));
+
+  let g = "";
+  for (let i = 0; i <= 4; i++){
+    const v = lo + (hi - lo) * i / 4;
+    g += `<line x1="${L}" y1="${py(v).toFixed(1)}" x2="${W-R}" y2="${py(v).toFixed(1)}" stroke="#8A6039" stroke-width="0.4" opacity="0.45"/>`;
+    g += `<text x="${L-6}" y="${(py(v)+4).toFixed(1)}" text-anchor="end" font-family="ui-monospace,monospace" font-size="10" fill="#54402D">${fmt(v)}</text>`;
+  }
+  g += `<text x="${L}" y="${H-8}" font-family="ui-monospace,monospace" font-size="10" fill="#54402D">1. Partie</text>`;
+  g += `<text x="${W-R}" y="${H-8}" text-anchor="end" font-family="ui-monospace,monospace" font-size="10" fill="#54402D">${laenge}. Partie</text>`;
+
+  aktiv.forEach((id, i) => {
+    const pts = reihen[id];
+    if (!pts.length) return;
+    const farbe = FARBEN[i % FARBEN.length];
+    const d = pts.map((p,j) => `${j ? "L" : "M"}${px(p.x).toFixed(1)},${py(p.v).toFixed(1)}`).join(" ");
+    g += `<path d="${d}" fill="none" stroke="${farbe}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
+    const last = pts[pts.length-1];
+    g += `<circle cx="${px(last.x).toFixed(1)}" cy="${py(last.v).toFixed(1)}" r="3" fill="${farbe}"/>`;
+  });
+  svg.innerHTML = g;
 }
 
 function stunden(m){ return new Date(m.created_at).getHours(); }
