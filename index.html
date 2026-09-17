@@ -73,6 +73,7 @@ details.alt[open] summary::after{content:"−"}
 details.alt[open] summary{margin-bottom:14px}
 .arow{display:grid;grid-template-columns:24px 1fr auto;gap:10px;align-items:center;padding:9px 0;border-top:1px solid var(--line)}
 .arow:first-of-type{border-top:none}
+.spyq{cursor:pointer;border-bottom:1px dashed var(--ink-soft);font-weight:600}
 .devline{margin:6px 18px 0;text-align:right;font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--ink-soft);opacity:.75}
 .arank{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--ink-soft)}
 .aname{font-family:'Fraunces',Georgia,serif;font-size:17px}
@@ -153,6 +154,11 @@ ul.log li.edit .btn{width:auto;padding:9px 16px}
 
       <div class="panel">
         <p class="eyebrow">Verlauf</p>
+        <div class="field hidden" id="spyPick">
+          <label for="spyWho">Schnüffeln</label>
+          <select id="spyWho"></select>
+        </div>
+        <p class="note hidden" id="spyNote" style="margin:0 0 12px"></p>
         <div id="log"><p class="empty">Wird geladen …</p></div>
       </div>
 
@@ -198,6 +204,11 @@ ul.log li.edit .btn{width:auto;padding:9px 16px}
         <div id="h2h"><p class="empty">Zwei Personen wählen.</p></div>
       </details>
 
+      <details class="panel alt">
+        <summary>Wer bei dir geschnüffelt hat</summary>
+        <div id="spyList"><p class="empty">Noch niemand.</p></div>
+      </details>
+
       <div class="bar">
         <span class="tag" id="stand">—</span>
         <button class="ghost" id="reload">Neu laden</button>
@@ -215,6 +226,8 @@ const $ = (id) => document.getElementById(id);
 const db = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 let players = [], matches = [], ratings = {}, stats = {}, deltas = {}, plus = {}, pm = {};
+let spyLog = [], viewing = null;
+const aufgedeckt = new Set();
 
 const deviceId = (() => {
   try {
@@ -313,6 +326,10 @@ async function load(tries = 6){
   try {
     pRes = await withTimeout(db.from("players").select("*"));
     mRes = await withTimeout(db.from("matches").select("*"));
+    try {
+      const sRes = await withTimeout(db.from("spy").select("*"));
+      if (!sRes.error && sRes.data) spyLog = sRes.data;
+    } catch (e) { /* Schnüffellog ist Beiwerk */ }
   } catch (e) {
     busy = false;
     retry(tries, e && e.message ? e.message : String(e));
@@ -329,9 +346,9 @@ async function load(tries = 6){
   $("stand").textContent = "Stand " + new Date().toLocaleTimeString("de-DE",{hour:"2-digit",minute:"2-digit"});
 }
 
-function deviceName(id){
+function deviceOwner(id){
   const mine = matches.filter(m => m.device === id);
-  if (mine.length < 5) return "unbekannt";
+  if (mine.length < 5) return null;
   const dabei = {};
   mine.forEach(m => {
     dabei[m.winner] = (dabei[m.winner] || 0) + 1;
@@ -343,10 +360,46 @@ function deviceName(id){
   const klar = (erste >= 0.82 && zweite <= 0.55)
             || (erste >  0.60 && zweite <= 0.40)
             || (erste >= 0.95 && zweite <= 0.85);
-  return klar ? nameOf(rang[0][0]) : "unbekannt";
+  return klar ? rang[0][0] : null;
 }
 
-function refresh(){ replay(); render(); renderAlt(); renderH2H(); }
+const ich = () => deviceOwner(deviceId);
+
+async function schnueffeln(zielId){
+  const mich = ich();
+  if (!mich || !zielId || zielId === mich) return;
+  const zeile = { actor: mich, target: zielId, created_at: new Date().toISOString() };
+  spyLog.push(zeile);
+  try { await withTimeout(db.from("spy").insert({ actor: mich, target: zielId })); } catch (e) { /* stumm */ }
+}
+
+function renderSpy(){
+  const box = $("spyList");
+  if (!box) return;
+  const mich = ich();
+  if (!mich){
+    box.innerHTML = `<p class="empty">Solange dein Gerät nicht erkannt ist, kann niemand bei dir schnüffeln.</p>`;
+    return;
+  }
+  const treffer = spyLog
+    .filter(z => z.target === mich)
+    .sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
+  if (treffer.length === 0){
+    box.innerHTML = `<p class="empty">Noch niemand.</p>`;
+    return;
+  }
+  box.innerHTML = treffer.map(z => {
+    const d = new Date(z.created_at);
+    return `<div class="arow">
+      <span class="arank">·</span>
+      <span class="aname" data-who="${z.actor}"></span>
+      <span class="meta">${d.toLocaleDateString("de-DE",{day:"2-digit",month:"2-digit"})} ${d.toLocaleTimeString("de-DE",{hour:"2-digit",minute:"2-digit"})}</span>
+    </div>`;
+  }).join("");
+  box.querySelectorAll("[data-who]").forEach(el => el.textContent = nameOf(el.dataset.who));
+}
+
+function refresh(){ replay(); render(); renderAlt(); renderH2H(); renderSpy(); }
 
 function renderH2H(){
   const box = $("h2h");
@@ -451,9 +504,38 @@ function render(){
   // Namen sicher einsetzen (kein HTML aus Eingaben)
   $("table").querySelectorAll(".pname").forEach((el,i) => el.textContent = rows[i].name);
 
-  const log = [...matches].sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
+  const mich = ich();
+  const ziel = mich ? (viewing || mich) : null;
+  const fremd = !!(mich && viewing && viewing !== mich);
+
+  if (mich){
+    $("spyPick").classList.remove("hidden");
+    $("spyNote").classList.remove("hidden");
+    const sel = $("spyWho"), keep = sel.value;
+    sel.innerHTML = `<option value="">Meine Spiele</option>` +
+      rows.filter(p => p.id !== mich).map(p => `<option value="${p.id}"></option>`).join("");
+    [...sel.options].slice(1).forEach((o,i) => {
+      o.textContent = rows.filter(p => p.id !== mich)[i].name;
+    });
+    sel.value = keep;
+    $("spyNote").textContent = fremd
+      ? `Du schnüffelst bei ${nameOf(viewing)}. Gegner*innen bleiben verdeckt — tipp auf ???, um jemanden aufzudecken.`
+      : "Du siehst nur Deine eigenen Spiele und die, die du eingetragen hast.";
+  } else {
+    $("spyPick").classList.add("hidden");
+    $("spyNote").classList.add("hidden");
+  }
+
+  const zeigName = (id) =>
+    (!fremd || id === ziel || id === mich || aufgedeckt.has(id)) ? nameOf(id) : null;
+
+  const log = [...matches]
+    .filter(m => !ziel
+      || m.winner === ziel || m.loser === ziel
+      || (!fremd && m.device === deviceId))
+    .sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
   if (log.length === 0){
-    $("log").innerHTML = `<p class="empty">Noch keine Partie eingetragen.</p>`;
+    $("log").innerHTML = `<p class="empty">${fremd ? "Keine Partien von dieser Person." : "Noch keine Partie eingetragen."}</p>`;
   } else {
     $("log").innerHTML = `<ul class="log">` + log.map(m => m.id === editingId ? `
         <li class="edit">
@@ -488,8 +570,25 @@ function render(){
         li.querySelector(".dt").textContent =
           d.toLocaleDateString("de-DE",{day:"2-digit",month:"2-digit"}) + " " +
           d.toLocaleTimeString("de-DE",{hour:"2-digit",minute:"2-digit"});
-        txt.textContent = `${nameOf(m.winner)} schlägt ${nameOf(m.loser)}`
-          + (m.mult>1 ? (m.mult>=3 ? "  BACKGAMMON" : "  GAMMON") : "");
+        const wName = zeigName(m.winner), lName = zeigName(m.loser);
+        const zusatz = (m.mult>1 ? (m.mult>=3 ? "  BACKGAMMON" : "  GAMMON") : "");
+        if (wName === null || lName === null){
+          txt.innerHTML = `<span class="w"></span> schlägt <span class="l"></span><span class="z"></span>`;
+          const setz = (el, id, name) => {
+            if (name === null){
+              el.textContent = "???";
+              el.className = "spyq";
+              el.dataset.spy = id;
+            } else {
+              el.textContent = name;
+            }
+          };
+          setz(txt.querySelector(".w"), m.winner, wName);
+          setz(txt.querySelector(".l"), m.loser, lName);
+          txt.querySelector(".z").textContent = zusatz;
+        } else {
+          txt.textContent = `${wName} schlägt ${lName}` + zusatz;
+        }
         return;
       }
       ["ew","el"].forEach(id => {
@@ -512,7 +611,7 @@ function render(){
   });
   updatePreview();
   const dl = $("devLine");
-  if (dl) dl.textContent = deviceName(deviceId);
+  if (dl) dl.textContent = ich() ? nameOf(ich()) : "unbekannt";
 }
 
 function updatePreview(){
@@ -525,6 +624,14 @@ function updatePreview(){
 }
 ["win","los","mult"].forEach(id => $(id).onchange = updatePreview);
 ["h2hA","h2hB"].forEach(id => $(id).onchange = renderH2H);
+
+$("spyWho").onchange = async () => {
+  const wahl = $("spyWho").value;
+  viewing = wahl || null;
+  render();
+  if (wahl) await schnueffeln(wahl);
+  renderSpy();
+};
 
 // --- Schreiben ---
 function say(text){ const el = $("msg"); el.textContent = text; el.classList.toggle("hidden", !text); }
@@ -553,6 +660,14 @@ $("addMatch").onclick = async () => {
 };
 
 document.addEventListener("click", async (e) => {
+  const spy = e.target.dataset?.spy;
+  if (spy){
+    aufgedeckt.add(spy);
+    render();
+    await schnueffeln(spy);
+    renderSpy();
+    return;
+  }
   const dm = e.target.dataset?.delm, dp = e.target.dataset?.delp;
   const ed = e.target.dataset?.editm, sv = e.target.dataset?.savem, cn = e.target.dataset?.cancel;
   if (ed){ editingId = ed; render(); return; }
