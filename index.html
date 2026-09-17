@@ -37,6 +37,21 @@ h1{font-family:'Fraunces',Georgia,serif;font-weight:800;font-size:clamp(30px,7vw
 .sub{color:var(--ink-soft);font-size:14px;margin:8px 0 0;max-width:52ch}
 .strip{display:block;width:100%;height:48px;margin:0 0 26px}
 .stack{max-width:620px;margin:0 auto}
+.headrow{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.statbtn{flex:none;margin-top:6px;background:var(--pearl);color:var(--bark);border:none;border-radius:3px;
+  padding:8px 14px;font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.1em;
+  text-transform:uppercase;cursor:pointer}
+.statbtn:hover{background:#fff}
+#rankChart{display:block;width:100%;height:auto;margin:4px 0 10px}
+.legend{display:flex;flex-wrap:wrap;gap:10px 16px;margin-bottom:6px}
+.legend span{display:flex;align-items:center;gap:6px;font-size:13px}
+.legend i{width:12px;height:12px;border-radius:2px;display:inline-block}
+.fact{padding:11px 0;border-top:1px solid var(--line)}
+.fact:first-child{border-top:none}
+.fact b{display:block;font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--ink-faint);font-weight:400;margin-bottom:3px}
+.fact span{font-family:'Fraunces',Georgia,serif;font-size:17px}
+.fact em{font-style:normal;color:var(--ink-soft);font-size:13px;font-family:'IBM Plex Sans',sans-serif}
 .panel{background:var(--wood-panel);border:1px solid var(--line);border-radius:4px;padding:18px}
 .panel+.panel{margin-top:20px}
 .eyebrow{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-faint);margin:0 0 14px}
@@ -118,13 +133,54 @@ ul.log li.edit .btn{width:auto;padding:9px 16px}
   <div id="app" class="hidden">
     <div class="head">
       <div class="head-in">
-        <h1>Backgammon-Liga</h1>
+        <div class="headrow">
+          <h1>Backgammon-Liga</h1>
+          <button class="statbtn" id="toStats">Statistik</button>
+        </div>
         <p class="sub">Jeder Sieg bringt Punkte: einfach 1, Gammon 2, Backgammon 3. Wer verliert, bekommt nichts abgezogen. Elo und Plus-Minus stehen unten als Nebenwertungen.</p>
       </div>
     </div>
     <svg class="strip" viewBox="0 0 380 48" preserveAspectRatio="none" aria-hidden="true" id="strip"></svg>
 
-    <div class="stack">
+    <div class="stack hidden" id="statsView">
+      <div class="panel">
+        <p class="eyebrow">Wer wann vorn lag</p>
+        <div class="field">
+          <label for="statMode">Wertung</label>
+          <select id="statMode">
+            <option value="pts">Punkte</option>
+            <option value="elo">Elo</option>
+            <option value="pm">Plus und Minus</option>
+            <option value="avg">Punkte pro Partie</option>
+          </select>
+        </div>
+        <svg id="rankChart" viewBox="0 0 360 230" role="img" aria-label="Platzierungen im Zeitverlauf"></svg>
+        <div id="chartLegend" class="legend"></div>
+        <p class="note">Jede Partie rückt die Kurven um einen Schritt. Oben ist Platz eins.</p>
+      </div>
+
+      <div class="panel">
+        <p class="eyebrow">Wann gespielt wird</p>
+        <div class="field">
+          <label for="actWho">Spieler*in</label>
+          <select id="actWho"><option value="">Alle</option></select>
+        </div>
+        <svg id="actChart" viewBox="0 0 360 160" role="img" aria-label="Partien nach Tageszeit"></svg>
+        <p class="note">Nach Uhrzeit des Eintragens, über alle Tage zusammengezählt.</p>
+      </div>
+
+      <div class="panel">
+        <p class="eyebrow">Fakten</p>
+        <div id="facts"><p class="empty">Noch zu wenig Material.</p></div>
+      </div>
+
+      <div class="bar">
+        <span class="tag">Zahlen aus dem Verlauf</span>
+        <button class="ghost" id="backFromStats">Zurück zur Tabelle</button>
+      </div>
+    </div>
+
+    <div class="stack" id="mainView">
       <div class="panel">
         <p class="eyebrow">Tabelle</p>
         <div id="table"><p class="empty">Wird geladen …</p></div>
@@ -409,6 +465,244 @@ function renderSecret(){
     .join(" · ");
 }
 
+// --- Statistik ---
+const FARBEN = ["#2A1D14","#8C3226","#C99B4E","#3E6B4F","#3E5C76","#7A4E8C","#A8621B","#5B6042"];
+
+function verlaufsRaenge(modus){
+  const chrono = [...matches].sort((a,b) => new Date(a.created_at) - new Date(b.created_at));
+  const punkte = {}, elo = {}, pmw = {}, spiele = {}, aktiv = new Set();
+  players.forEach(p => { punkte[p.id] = 0; elo[p.id] = START; pmw[p.id] = 0; spiele[p.id] = 0; });
+  const reihen = {};
+  players.forEach(p => reihen[p.id] = []);
+
+  chrono.forEach((m, idx) => {
+    if (punkte[m.winner] === undefined || punkte[m.loser] === undefined) return;
+    const v = m.mult || 1;
+    const d = Math.round(K * v * (1 - expected(elo[m.winner], elo[m.loser])));
+    elo[m.winner] += d; elo[m.loser] -= d;
+    punkte[m.winner] += v; pmw[m.winner] += v; pmw[m.loser] -= v;
+    spiele[m.winner]++; spiele[m.loser]++;
+    aktiv.add(m.winner); aktiv.add(m.loser);
+
+    const wert = (id) => modus === "elo" ? elo[id]
+                       : modus === "pm"  ? pmw[id]
+                       : modus === "avg" ? (spiele[id] ? punkte[id] / spiele[id] * 10 : 0)
+                       : punkte[id];
+    const liste = [...aktiv].sort((a,b) => wert(b) - wert(a) || nameOf(a).localeCompare(nameOf(b)));
+    liste.forEach((id, platz) => reihen[id].push({ x: idx + 1, r: platz + 1 }));
+  });
+  return { reihen, laenge: chrono.length, aktiv: [...aktiv] };
+}
+
+function zeichneChart(){
+  const svg = $("rankChart"), leg = $("chartLegend");
+  if (!svg) return;
+  const modus = $("statMode") ? $("statMode").value : "pts";
+  const { reihen, laenge, aktiv } = verlaufsRaenge(modus);
+  if (laenge < 2 || aktiv.length < 2){
+    svg.innerHTML = `<text x="12" y="30" font-size="13" fill="#54402D">Zu wenig Partien für einen Verlauf.</text>`;
+    leg.innerHTML = "";
+    return;
+  }
+  const W = 360, H = 230, L = 26, R = 12, T = 14, B = 26;
+  const maxR = aktiv.length;
+  const px = (x) => L + (x - 1) / Math.max(1, laenge - 1) * (W - L - R);
+  const py = (r) => T + (r - 1) / Math.max(1, maxR - 1) * (H - T - B);
+
+  let g = "";
+  for (let r = 1; r <= maxR; r++){
+    g += `<line x1="${L}" y1="${py(r)}" x2="${W-R}" y2="${py(r)}" stroke="#8A6039" stroke-width="0.4" opacity="0.5"/>`;
+    g += `<text x="${L-6}" y="${py(r)+4}" text-anchor="end" font-family="ui-monospace,monospace" font-size="10" fill="#54402D">${r}</text>`;
+  }
+  g += `<text x="${L}" y="${H-8}" font-family="ui-monospace,monospace" font-size="10" fill="#54402D">1. Partie</text>`;
+  g += `<text x="${W-R}" y="${H-8}" text-anchor="end" font-family="ui-monospace,monospace" font-size="10" fill="#54402D">${laenge}. Partie</text>`;
+
+  aktiv.forEach((id, i) => {
+    const pts = reihen[id];
+    if (!pts.length) return;
+    const farbe = FARBEN[i % FARBEN.length];
+    const d = pts.map((p,j) => `${j ? "L" : "M"}${px(p.x).toFixed(1)},${py(p.r).toFixed(1)}`).join(" ");
+    g += `<path d="${d}" fill="none" stroke="${farbe}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
+    const last = pts[pts.length-1];
+    g += `<circle cx="${px(last.x).toFixed(1)}" cy="${py(last.r).toFixed(1)}" r="3" fill="${farbe}"/>`;
+  });
+  svg.innerHTML = g;
+
+  leg.innerHTML = aktiv.map((id,i) =>
+    `<span><i style="background:${FARBEN[i % FARBEN.length]}"></i><b class="ln" data-id="${id}"></b></span>`).join("");
+  leg.querySelectorAll(".ln").forEach(el => el.textContent = nameOf(el.dataset.id));
+}
+
+function stunden(m){ return new Date(m.created_at).getHours(); }
+
+function zeichneAktivitaet(){
+  const svg = $("actChart"), sel = $("actWho");
+  if (!svg) return;
+
+  const keep = sel.value;
+  sel.innerHTML = `<option value="">Alle</option>` +
+    players.map(p => `<option value="${p.id}"></option>`).join("");
+  [...sel.options].slice(1).forEach((o,i) => o.textContent = players[i].name);
+  sel.value = keep;
+
+  const wen = sel.value;
+  const eimer = new Array(24).fill(0);
+  matches.forEach(m => {
+    if (wen && m.winner !== wen && m.loser !== wen) return;
+    eimer[stunden(m)]++;
+  });
+  const max = Math.max(...eimer);
+
+  const W = 360, H = 160, L = 8, R = 8, OBEN = 44, UNTEN = 22;
+  const platz = (W - L - R) / 24;
+  const breite = Math.min(11, platz - 3);
+  const hoch = H - OBEN - UNTEN;
+  const jetzt = new Date().getHours();
+
+  let g = "";
+  for (let h = 0; h < 24; h++){
+    const x = L + h * platz + (platz - breite) / 2;
+    const hh = max ? Math.max(3, eimer[h] / max * hoch) : 3;
+    const y = H - UNTEN - hh;
+    const farbe = h === jetzt ? "#8C3226" : "#7A5231";
+    g += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${breite}" height="${hh.toFixed(1)}" rx="${(breite/2).toFixed(1)}" fill="${farbe}" opacity="${h === jetzt ? 1 : 0.75}"/>`;
+    if (h % 3 === 0){
+      g += `<text x="${(x + breite/2).toFixed(1)}" y="${H-6}" text-anchor="middle" font-family="ui-monospace,monospace" font-size="9" fill="#54402D">${String(h).padStart(2,"0")}</text>`;
+    }
+  }
+
+  const wert = eimer[jetzt];
+  const lage = max === 0 ? "noch keine Partie erfasst"
+             : wert === 0 ? "um diese Zeit spielt sonst niemand"
+             : wert >= max * 0.66 ? "Hochbetrieb"
+             : wert >= max * 0.33 ? "mittelmäßig los"
+             : "wenig los";
+  const lx = L + jetzt * platz + platz/2;
+  const anker = lx > W * 0.6 ? "end" : "start";
+  const tx = anker === "end" ? Math.min(W - R, lx + breite) : Math.max(L, lx - breite);
+  g += `<text x="${tx.toFixed(1)}" y="16" text-anchor="${anker}" font-family="ui-monospace,monospace" font-size="11" fill="#8C3226">Aktuell ${String(jetzt).padStart(2,"0")} Uhr</text>`;
+  g += `<text x="${tx.toFixed(1)}" y="31" text-anchor="${anker}" font-family="'IBM Plex Sans',sans-serif" font-size="12" fill="#1B120B">${lage}</text>`;
+  g += `<line x1="${lx.toFixed(1)}" y1="36" x2="${lx.toFixed(1)}" y2="${(H-UNTEN-3).toFixed(1)}" stroke="#8C3226" stroke-width="0.8" stroke-dasharray="2 3" opacity="0.7"/>`;
+
+  svg.innerHTML = g;
+}
+
+function fakten(){
+  const F = [];
+  const zaehl = (obj, k, n = 1) => obj[k] = (obj[k] || 0) + n;
+  const besteZeile = (obj) => Object.entries(obj).sort((a,b) => b[1] - a[1])[0];
+
+  const gammon = {}, backg = {}, nacht = {}, frueh = {}, paare = {}, eingetragen = {};
+  matches.forEach(m => {
+    if ((m.mult||1) === 2) zaehl(gammon, m.winner);
+    if ((m.mult||1) >= 3) zaehl(backg, m.winner);
+    const h = stunden(m);
+    [m.winner, m.loser].forEach(id => {
+      if (h >= 22 || h < 5) zaehl(nacht, id);
+      if (h >= 5 && h < 10) zaehl(frueh, id);
+    });
+    const paar = [m.winner, m.loser].sort().join("|");
+    zaehl(paare, paar);
+    if (m.device) zaehl(eingetragen, m.device);
+  });
+
+  const g = besteZeile(gammon);
+  if (g) F.push(["Gammon-Spezialist*in", `${nameOf(g[0])} — ${g[1]}×`, "Sieg, bevor die andere Seite einen Stein herausgespielt hat"]);
+  const b = besteZeile(backg);
+  if (b) F.push(["Backgammon-König*in", `${nameOf(b[0])} — ${b[1]}×`, "der dreifache Sieg, die seltenste Sorte"]);
+
+  const pa = besteZeile(paare);
+  if (pa && pa[1] > 1){
+    const [x,y] = pa[0].split("|");
+    F.push(["Lieblingsduell", `${nameOf(x)} gegen ${nameOf(y)}`, `${partien(pa[1])} miteinander`]);
+  }
+
+  const n = besteZeile(nacht);
+  if (n) F.push(["Nachteule", `${nameOf(n[0])} — ${partien(n[1])}`, "zwischen 22 und 5 Uhr eingetragen"]);
+  const f = besteZeile(frueh);
+  if (f) F.push(["Frühsportler*in", `${nameOf(f[0])} — ${partien(f[1])}`, "zwischen 5 und 10 Uhr eingetragen"]);
+
+  // längste Siegesserie
+  let serie = null;
+  players.forEach(p => {
+    const eigene = [...matches]
+      .filter(m => m.winner === p.id || m.loser === p.id)
+      .sort((a,b) => new Date(a.created_at) - new Date(b.created_at));
+    let laufend = 0, best = 0;
+    eigene.forEach(m => { laufend = m.winner === p.id ? laufend + 1 : 0; if (laufend > best) best = laufend; });
+    if (best > 1 && (!serie || best > serie[1])) serie = [p.id, best];
+  });
+  if (serie) F.push(["Längste Siegesserie", `${nameOf(serie[0])} — ${serie[1]} in Folge`, "ohne Niederlage dazwischen"]);
+
+  // Angstgegner*in
+  let angst = null;
+  players.forEach(p => {
+    const gegen = {};
+    matches.forEach(m => {
+      if (m.loser === p.id) zaehl(gegen, m.winner);
+    });
+    const schlimm = besteZeile(gegen);
+    if (schlimm && schlimm[1] >= 3 && (!angst || schlimm[1] > angst[2])) angst = [p.id, schlimm[0], schlimm[1]];
+  });
+  if (angst) F.push(["Angstgegner*in", `${nameOf(angst[1])} für ${nameOf(angst[0])}`, `${angst[2]} Niederlagen kassiert`]);
+
+  // Rekordabend
+  const tage = {};
+  matches.forEach(m => zaehl(tage, new Date(m.created_at).toLocaleDateString("de-DE")));
+  const tag = besteZeile(tage);
+  if (tag && tag[1] > 1) F.push(["Rekordabend", `${tag[0]}`, `${partien(tag[1])} an einem Tag`]);
+
+  // fleißigste Eintragerin
+  const eg = besteZeile(eingetragen);
+  if (eg){
+    const besitzer = deviceOwner(eg[0]);
+    F.push(["Fleißigste*r Schreiber*in", besitzer ? nameOf(besitzer) : "ein unbekanntes Gerät", `${partien(eg[1])} eingetragen`]);
+  }
+
+  // Schnüffelei
+  const schnueffler = {};
+  spyLog.forEach(z => zaehl(schnueffler, z.actor));
+  const sn = besteZeile(schnueffler);
+  if (sn) F.push(["Größte Neugier", `${nameOf(sn[0])}`, `${sn[1]}× geschnüffelt`]);
+
+  // Vielspieler*in und Kurzer Prozess
+  const gesamt = {};
+  matches.forEach(m => { zaehl(gesamt, m.winner); zaehl(gesamt, m.loser); });
+  const viel = besteZeile(gesamt);
+  if (viel) F.push(["Vielspieler*in", `${nameOf(viel[0])} — ${partien(viel[1])}`, "häufigste Beteiligung"]);
+
+  let kurz = null;
+  players.forEach(p => {
+    const siege = matches.filter(m => m.winner === p.id);
+    if (siege.length < 3) return;
+    const hoch = siege.filter(m => (m.mult||1) > 1).length;
+    const quote = hoch / siege.length;
+    if (!kurz || quote > kurz[1]) kurz = [p.id, quote, hoch, siege.length];
+  });
+  if (kurz && kurz[1] > 0) F.push(["Kurzer Prozess", `${nameOf(kurz[0])} — ${Math.round(kurz[1]*100)} %`,
+    `${kurz[2]} von ${kurz[3]} Siegen waren Gammon oder Backgammon`]);
+
+  return F;
+}
+
+function renderStats(){
+  if ($("statsView").classList.contains("hidden")) return;
+  zeichneChart();
+  zeichneAktivitaet();
+  const box = $("facts");
+  const F = fakten();
+  if (F.length === 0){
+    box.innerHTML = `<p class="empty">Noch zu wenig Material. Ein paar Partien mehr, dann wird es interessant.</p>`;
+    return;
+  }
+  box.innerHTML = F.map(([t,w,e]) =>
+    `<div class="fact"><b>${t}</b><span class="fw"></span><br><em class="fe"></em></div>`).join("");
+  box.querySelectorAll(".fact").forEach((el,i) => {
+    el.querySelector(".fw").textContent = F[i][1];
+    el.querySelector(".fe").textContent = F[i][2] || "";
+  });
+}
+
 function renderSpy(){
   const box = $("spyList"), panel = $("spyPanel");
   if (!box) return;
@@ -436,7 +730,7 @@ function renderSpy(){
   box.querySelectorAll("[data-who]").forEach(el => el.textContent = nameOf(el.dataset.who));
 }
 
-function refresh(){ replay(); render(); renderAlt(); renderH2H(); renderSpy(); }
+function refresh(){ replay(); render(); renderAlt(); renderH2H(); renderSpy(); renderStats(); }
 
 function renderH2H(){
   const box = $("h2h");
@@ -739,6 +1033,20 @@ document.addEventListener("click", async (e) => {
     players = players.filter(x => x.id !== dp); refresh();
   }
 });
+
+$("toStats").onclick = () => {
+  $("mainView").classList.add("hidden");
+  $("statsView").classList.remove("hidden");
+  renderStats();
+  window.scrollTo(0, 0);
+};
+$("backFromStats").onclick = () => {
+  $("statsView").classList.add("hidden");
+  $("mainView").classList.remove("hidden");
+  window.scrollTo(0, 0);
+};
+$("statMode").onchange = zeichneChart;
+$("actWho").onchange = zeichneAktivitaet;
 
 $("devLine").onclick = () => {
   $("devSecret").classList.toggle("hidden");
