@@ -214,6 +214,7 @@ ul.log li.edit .btn{width:auto;padding:9px 16px}
         <button class="ghost" id="reload">Neu laden</button>
       </div>
       <p class="devline" id="devLine"></p>
+      <div class="devline hidden" id="devSecret"></div>
     </div>
   </div>
 </div>
@@ -381,6 +382,31 @@ async function schnueffeln(zielId){
   const zeile = { actor: mich, target: zielId, created_at: new Date().toISOString() };
   spyLog.push(zeile);
   try { await withTimeout(db.from("spy").insert({ actor: mich, target: zielId })); } catch (e) { /* stumm */ }
+}
+
+function renderOhneSprung(){
+  const alt = $("log").querySelector("ul.log");
+  const innen = alt ? alt.scrollTop : 0;
+  const seite = window.scrollY;
+  render();
+  const neu = $("log").querySelector("ul.log");
+  if (neu) neu.scrollTop = innen;
+  window.scrollTo(0, seite);
+}
+
+function renderSecret(){
+  const box = $("devSecret");
+  if (!box || box.classList.contains("hidden")) return;
+  const erkannt = Object.keys(erkannteGeraete());
+  if (erkannt.length === 0){
+    box.textContent = "noch kein Gerät zugeordnet";
+    return;
+  }
+  const mich = ich();
+  box.textContent = "zugeordnet: " + erkannt
+    .map(id => nameOf(id) + (id === mich ? " (du)" : ""))
+    .sort()
+    .join(" · ");
 }
 
 function renderSpy(){
@@ -623,6 +649,7 @@ function render(){
   updatePreview();
   const dl = $("devLine");
   if (dl) dl.textContent = ich() ? nameOf(ich()) : "unbekannt";
+  renderSecret();
 }
 
 function updatePreview(){
@@ -674,7 +701,7 @@ document.addEventListener("click", async (e) => {
   const spy = e.target.dataset?.spy;
   if (spy){
     aufgedeckt.add(spy);
-    render();
+    renderOhneSprung();
     await schnueffeln(spy);
     renderSpy();
     return;
@@ -712,6 +739,11 @@ document.addEventListener("click", async (e) => {
     players = players.filter(x => x.id !== dp); refresh();
   }
 });
+
+$("devLine").onclick = () => {
+  $("devSecret").classList.toggle("hidden");
+  renderSecret();
+};
 
 $("reload").onclick = () => { busy = false; load(); };
 </script>
