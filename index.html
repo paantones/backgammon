@@ -466,9 +466,21 @@ function renderSecret(){
 }
 
 // --- Statistik ---
+const MIN_SPIELE = 10;
+
+function qualifiziert(){
+  const zahl = {};
+  matches.forEach(m => {
+    zahl[m.winner] = (zahl[m.winner] || 0) + 1;
+    zahl[m.loser]  = (zahl[m.loser]  || 0) + 1;
+  });
+  return players.filter(p => (zahl[p.id] || 0) >= MIN_SPIELE).map(p => p.id);
+}
+
 const FARBEN = ["#2A1D14","#8C3226","#C99B4E","#3E6B4F","#3E5C76","#7A4E8C","#A8621B","#5B6042"];
 
 function verlaufsRaenge(modus){
+  const dabei = new Set(qualifiziert());
   const chrono = [...matches].sort((a,b) => new Date(a.created_at) - new Date(b.created_at));
   const punkte = {}, elo = {}, pmw = {}, spiele = {}, aktiv = new Set();
   players.forEach(p => { punkte[p.id] = 0; elo[p.id] = START; pmw[p.id] = 0; spiele[p.id] = 0; });
@@ -482,7 +494,8 @@ function verlaufsRaenge(modus){
     elo[m.winner] += d; elo[m.loser] -= d;
     punkte[m.winner] += v; pmw[m.winner] += v; pmw[m.loser] -= v;
     spiele[m.winner]++; spiele[m.loser]++;
-    aktiv.add(m.winner); aktiv.add(m.loser);
+    if (dabei.has(m.winner)) aktiv.add(m.winner);
+    if (dabei.has(m.loser))  aktiv.add(m.loser);
 
     const wert = (id) => modus === "elo" ? elo[id]
                        : modus === "pm"  ? pmw[id]
@@ -500,7 +513,7 @@ function zeichneChart(){
   const modus = $("statMode") ? $("statMode").value : "pts";
   const { reihen, laenge, aktiv } = verlaufsRaenge(modus);
   if (laenge < 2 || aktiv.length < 2){
-    svg.innerHTML = `<text x="12" y="30" font-size="13" fill="#54402D">Zu wenig Partien für einen Verlauf.</text>`;
+    svg.innerHTML = `<text x="12" y="30" font-size="13" fill="#54402D">Ab ${MIN_SPIELE} Partien pro Person geht es hier los.</text>`;
     leg.innerHTML = "";
     return;
   }
@@ -539,16 +552,25 @@ function zeichneAktivitaet(){
   const svg = $("actChart"), sel = $("actWho");
   if (!svg) return;
 
+  const dabei = qualifiziert();
   const keep = sel.value;
+  const liste = players.filter(p => dabei.includes(p.id));
   sel.innerHTML = `<option value="">Alle</option>` +
-    players.map(p => `<option value="${p.id}"></option>`).join("");
-  [...sel.options].slice(1).forEach((o,i) => o.textContent = players[i].name);
-  sel.value = keep;
+    liste.map(p => `<option value="${p.id}"></option>`).join("");
+  [...sel.options].slice(1).forEach((o,i) => o.textContent = liste[i].name);
+  sel.value = dabei.includes(keep) ? keep : "";
+
+  if (dabei.length === 0){
+    svg.innerHTML = `<text x="8" y="30" font-size="13" fill="#54402D">Ab ${MIN_SPIELE} Partien pro Person geht es hier los.</text>`;
+    return;
+  }
 
   const wen = sel.value;
   const eimer = new Array(24).fill(0);
   matches.forEach(m => {
-    if (wen && m.winner !== wen && m.loser !== wen) return;
+    if (wen){
+      if (m.winner !== wen && m.loser !== wen) return;
+    } else if (!dabei.includes(m.winner) && !dabei.includes(m.loser)) return;
     eimer[stunden(m)]++;
   });
   const max = Math.max(...eimer);
