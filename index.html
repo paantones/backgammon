@@ -154,11 +154,11 @@ ul.log li.edit .btn{width:auto;padding:9px 16px}
 
       <div class="panel">
         <p class="eyebrow">Verlauf</p>
+        <p class="note hidden" id="spyNote" style="margin:0 0 12px"></p>
         <div class="field hidden" id="spyPick">
-          <label for="spyWho">Schnüffeln</label>
+          <label for="spyWho">Schnüffeln bei</label>
           <select id="spyWho"></select>
         </div>
-        <p class="note hidden" id="spyNote" style="margin:0 0 12px"></p>
         <div id="log"><p class="empty">Wird geladen …</p></div>
       </div>
 
@@ -519,8 +519,8 @@ function render(){
     });
     sel.value = keep;
     $("spyNote").textContent = fremd
-      ? `Du schnüffelst bei ${nameOf(viewing)}. Gegner*innen bleiben verdeckt — tipp auf ???, um jemanden aufzudecken.`
-      : "Du siehst nur Deine eigenen Spiele und die, die du eingetragen hast.";
+      ? `Du schnüffelst bei ${nameOf(viewing)}. Gegner*innen bleiben verdeckt — tipp auf ???, um auch die*den Gegner*in zu erschnüffeln.`
+      : "Du siehst nur Deine eigenen Spiele und die, die du eingetragen hast. Du kannst aber bei anderen Spieler*innen schnüffeln, dann siehst du ihre*seine Spiele.";
   } else {
     $("spyPick").classList.add("hidden");
     $("spyNote").classList.add("hidden");
