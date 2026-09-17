@@ -204,7 +204,7 @@ ul.log li.edit .btn{width:auto;padding:9px 16px}
         <div id="h2h"><p class="empty">Zwei Personen wählen.</p></div>
       </details>
 
-      <details class="panel alt">
+      <details class="panel alt hidden" id="spyPanel">
         <summary>Wer bei dir geschnüffelt hat</summary>
         <div id="spyList"><p class="empty">Noch niemand.</p></div>
       </details>
@@ -384,13 +384,14 @@ async function schnueffeln(zielId){
 }
 
 function renderSpy(){
-  const box = $("spyList");
+  const box = $("spyList"), panel = $("spyPanel");
   if (!box) return;
   const mich = ich();
   if (!mich){
-    box.innerHTML = `<p class="empty">Solange dein Gerät nicht erkannt ist, kann niemand bei dir schnüffeln.</p>`;
+    if (panel) panel.classList.add("hidden");
     return;
   }
+  if (panel) panel.classList.remove("hidden");
   const treffer = spyLog
     .filter(z => z.target === mich)
     .sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
