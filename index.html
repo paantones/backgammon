@@ -1412,6 +1412,29 @@ function renderGames(){
 // --- Brett zeichnen ---
 const HELL = "#F5EFE2", DUNKEL = "#1E1712", HOLZ = "#C1946A", ZUNGE_A = "#4A3220", ZUNGE_B = "#8A6039";
 
+const AUGENPUNKTE = {
+  1: [[0.5,0.5]],
+  2: [[0.28,0.28],[0.72,0.72]],
+  3: [[0.25,0.25],[0.5,0.5],[0.75,0.75]],
+  4: [[0.28,0.28],[0.72,0.28],[0.28,0.72],[0.72,0.72]],
+  5: [[0.27,0.27],[0.73,0.27],[0.5,0.5],[0.27,0.73],[0.73,0.73]],
+  6: [[0.28,0.24],[0.72,0.24],[0.28,0.5],[0.72,0.5],[0.28,0.76],[0.72,0.76]]
+};
+
+function wuerfelBild(x, y, gr, augen, blass){
+  const deck = blass ? 0.32 : 1;
+  let g = `<g opacity="${deck}">`;
+  g += `<rect x="${x}" y="${y}" width="${gr}" height="${gr}" rx="${(gr*0.18).toFixed(1)}" fill="#161210" stroke="#F2EADA" stroke-width="1"/>`;
+  if (!augen){
+    g += `<text x="${x + gr/2}" y="${y + gr*0.68}" text-anchor="middle" font-family="ui-monospace,monospace" font-size="${(gr*0.5).toFixed(1)}" fill="#F2EADA">?</text>`;
+  } else {
+    (AUGENPUNKTE[augen] || []).forEach(([px, py]) => {
+      g += `<circle cx="${(x + px*gr).toFixed(1)}" cy="${(y + py*gr).toFixed(1)}" r="${(gr*0.1).toFixed(1)}" fill="#F5EFE2"/>`;
+    });
+  }
+  return g + `</g>`;
+}
+
 function punktGeometrie(i){
   const rand = 10, barB = 16, bh = 118, H = 300;
   const breite = (360 - 2*rand - barB) / 12;
@@ -1467,6 +1490,27 @@ function zeichneBrett(){
 
   g += `<text x="6" y="152" font-family="ui-monospace,monospace" font-size="10" fill="#2A1D14">raus ${stand.off[1]}/${stand.off[2]}</text>`;
 
+  // Würfel in der Mitte
+  if (stand.phase === "eroeffnung"){
+    const gr = 30, y = 135;
+    g += wuerfelBild(86, y, gr, stand.erst[1], false);
+    g += wuerfelBild(244, y, gr, stand.erst[2], false);
+    g += `<text x="101" y="${y - 6}" text-anchor="middle" font-family="ui-monospace,monospace" font-size="9" fill="#2A1D14">hell</text>`;
+    g += `<text x="259" y="${y - 6}" text-anchor="middle" font-family="ui-monospace,monospace" font-size="9" fill="#2A1D14">dunkel</text>`;
+  } else if (stand.wurf.length){
+    const pasch = stand.wurf[0] === stand.wurf[1];
+    const anzahl = pasch ? 4 : 2;
+    const offen = stand.rest.length;
+    const gr = pasch ? 24 : 30;
+    const abstand = gr + 6;
+    const start = pasch ? 196 : 210;
+    for (let k = 0; k < anzahl; k++){
+      const augen = pasch ? stand.wurf[0] : stand.wurf[k];
+      const blass = pasch ? k >= offen : !stand.rest.includes(augen);
+      g += wuerfelBild(start + k*abstand, 138, gr, augen, blass);
+    }
+  }
+
   // Klickflächen
   for (let i = 0; i < 24; i++){
     const G = punktGeometrie(i);
@@ -1497,9 +1541,9 @@ function brettStatus(){
   if (stand.phase === "eroeffnung"){
     const meins = stand.erst[meinSitz], seins = stand.erst[meinSitz === 1 ? 2 : 1];
     const teil = (v) => v == null ? "noch nicht" : v;
-    $("boardStatus").textContent =
-      `Eröffnungswurf — du: ${teil(meins)}, ${namen[meinSitz === 1 ? 2 : 1]}: ${teil(seins)}`
-      + (meins != null && seins != null ? " — gleich hoch, noch einmal" : "");
+    $("boardStatus").textContent = meins == null
+      ? "Eröffnungswurf — du bist dran"
+      : (seins == null ? `Eröffnungswurf — warten auf ${namen[meinSitz === 1 ? 2 : 1]}` : "gleich hoch, noch einmal");
     $("rollBtn").disabled = meins != null;
     $("undoBtn").disabled = true;
     $("boardHinweis").textContent = "Beide werfen einen Würfel. Wer höher wirft, beginnt und spielt beide Augen.";
@@ -1507,10 +1551,9 @@ function brettStatus(){
   }
   $("boardHinweis").textContent = "Tipp auf einen eigenen Stein, dann auf das Ziel.";
   const dran = stand.turn === meinSitz;
-  const wurf = stand.wurf.length ? ` — Wurf ${stand.wurf.join(" und ")}, offen: ${stand.rest.join(", ") || "nichts"}` : "";
   $("boardStatus").textContent = dran
-    ? (stand.rest.length ? `Du bist dran${wurf}` : `Du bist dran — würfeln`)
-    : `${namen[stand.turn]} ist dran${wurf}`;
+    ? (stand.rest.length ? "Du bist dran" : "Du bist dran — würfeln")
+    : `${namen[stand.turn]} ist dran`;
   $("rollBtn").disabled = !dran || stand.rest.length > 0;
   $("undoBtn").disabled = !dran || verlauf.length === 0;
 }
