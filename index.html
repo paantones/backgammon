@@ -38,7 +38,13 @@ h1{font-family:'Fraunces',Georgia,serif;font-weight:800;font-size:clamp(30px,7vw
 .strip{display:block;width:100%;height:48px;margin:0 0 26px}
 .stack{max-width:620px;margin:0 auto}
 .headrow{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
-.kopfknoepfe{display:flex;flex-direction:column;gap:6px;flex:none}
+.tabs{position:sticky;top:0;z-index:20;display:flex;background:var(--bark-edge);
+  padding-top:env(safe-area-inset-top,0px);box-shadow:0 1px 6px rgba(0,0,0,.25)}
+.tab{flex:1;background:none;border:none;color:#C6B396;font-family:'IBM Plex Mono',monospace;
+  font-size:12px;letter-spacing:.12em;text-transform:uppercase;padding:14px 4px;cursor:pointer;
+  border-bottom:3px solid transparent}
+.tab.aktiv{color:var(--pearl);background:var(--bark);border-bottom-color:var(--pearl)}
+.tab:focus-visible{outline:2px solid var(--pearl);outline-offset:-3px}
 #board{display:block;width:100%;height:auto;margin:4px 0 10px;touch-action:manipulation}
 .gzeile{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
 .gzeile:first-child{border-top:none}
@@ -136,15 +142,14 @@ ul.log li.edit .btn{width:auto;padding:9px 16px}
   </div>
 
   <div id="app" class="hidden">
+    <nav class="tabs" id="tabs">
+      <button class="tab aktiv" data-view="mainView">Liga</button>
+      <button class="tab" data-view="statsView">Statistik</button>
+      <button class="tab" data-view="gamesView">Spielen</button>
+    </nav>
     <div class="head">
       <div class="head-in">
-        <div class="headrow">
-          <h1>Backgammon-Liga</h1>
-          <span class="kopfknoepfe">
-            <button class="statbtn" id="toGames">Spielen</button>
-            <button class="statbtn" id="toStats">Statistik</button>
-          </span>
-        </div>
+        <h1>Backgammon-Liga</h1>
         <p class="sub">Jeder Sieg bringt Punkte: einfach 1, Gammon 2, Backgammon 3. Wer verliert, bekommt nichts abgezogen. Elo und Plus-Minus stehen unten als Nebenwertungen.</p>
       </div>
     </div>
@@ -185,10 +190,7 @@ ul.log li.edit .btn{width:auto;padding:9px 16px}
         <div id="facts"><p class="empty">Noch zu wenig Material.</p></div>
       </div>
 
-      <div class="bar">
-        <span class="tag">Zahlen aus dem Verlauf</span>
-        <button class="ghost" id="backFromStats">Zurück zur Tabelle</button>
-      </div>
+
     </div>
 
     <div class="stack hidden" id="gamesView">
@@ -211,10 +213,7 @@ ul.log li.edit .btn{width:auto;padding:9px 16px}
         <div id="gameList"><p class="empty">Noch keine.</p></div>
       </div>
 
-      <div class="bar">
-        <span class="tag">ohne Verdopplungswürfel</span>
-        <button class="ghost" id="backFromGames">Zurück zur Tabelle</button>
-      </div>
+
     </div>
 
     <div class="stack hidden" id="boardView">
@@ -534,8 +533,8 @@ function qualifiziert(){
 
 const FARBEN = ["#2A1D14","#8C3226","#C99B4E","#3E6B4F","#3E5C76","#7A4E8C","#A8621B","#5B6042"];
 
-function verlaufsRaenge(modus){
-  const dabei = new Set(qualifiziert());
+function verlaufsRaenge(modus, nurQualifizierte = true){
+  const dabei = new Set(nurQualifizierte ? qualifiziert() : players.map(p => p.id));
   const chrono = [...matches].sort((a,b) => new Date(a.created_at) - new Date(b.created_at));
   const punkte = {}, elo = {}, pmw = {}, spiele = {}, aktiv = new Set();
   players.forEach(p => { punkte[p.id] = 0; elo[p.id] = START; pmw[p.id] = 0; spiele[p.id] = 0; });
@@ -743,16 +742,75 @@ function fakten(){
   if (serie) F.push(["Längste Siegesserie", `${nameOf(serie[0])} — ${serie[1]} in Folge`, "ohne Niederlage dazwischen"]);
 
   // Angstgegner*in
-  let angst = null;
+  let angst = null, opfer = null, ausgeglichen = null;
   players.forEach(p => {
-    const gegen = {};
+    const bilanz = {};
     matches.forEach(m => {
-      if (m.loser === p.id) zaehl(gegen, m.winner);
+      if (m.winner === p.id){ bilanz[m.loser] = bilanz[m.loser] || [0,0]; bilanz[m.loser][0]++; }
+      if (m.loser === p.id){ bilanz[m.winner] = bilanz[m.winner] || [0,0]; bilanz[m.winner][1]++; }
     });
-    const schlimm = besteZeile(gegen);
-    if (schlimm && schlimm[1] >= 3 && (!angst || schlimm[1] > angst[2])) angst = [p.id, schlimm[0], schlimm[1]];
+    Object.entries(bilanz).forEach(([geg, [s2, n2]]) => {
+      const summe = s2 + n2;
+      if (summe < 3) return;
+      const quote = s2 / summe;
+      if (!angst || quote < angst[1]) angst = [[p.id, geg], quote, summe, s2];
+      if (!opfer || quote > opfer[1]) opfer = [[p.id, geg], quote, summe, s2];
+      const abstand = Math.abs(quote - 0.5);
+      if (summe >= 4 && (!ausgeglichen || abstand < ausgeglichen[1])) ausgeglichen = [[p.id, geg], abstand, summe, s2, n2];
+    });
   });
-  if (angst) F.push(["Angstgegner*in", `${nameOf(angst[1])} für ${nameOf(angst[0])}`, `${angst[2]} Niederlagen kassiert`]);
+  if (angst) F.push(["Angstgegner*in", `${nameOf(angst[0][1])} für ${nameOf(angst[0][0])}`,
+    `nur ${Math.round(angst[1]*100)} % Siege aus ${partien(angst[2])}`]);
+  if (opfer && opfer[1] > 0.5) F.push(["Lieblingsopfer", `${nameOf(opfer[0][1])} für ${nameOf(opfer[0][0])}`,
+    `${Math.round(opfer[1]*100)} % Siege aus ${partien(opfer[2])}`]);
+  if (ausgeglichen) F.push(["Ausgeglichenste Paarung", `${nameOf(ausgeglichen[0][0])} gegen ${nameOf(ausgeglichen[0][1])}`,
+    `${ausgeglichen[3]} zu ${ausgeglichen[4]} aus ${partien(ausgeglichen[2])}`]);
+
+  // Pechsträhne
+  let pech = null;
+  players.forEach(p => {
+    const eigene = [...matches]
+      .filter(m => m.winner === p.id || m.loser === p.id)
+      .sort((a,b) => new Date(a.created_at) - new Date(b.created_at));
+    let laufend = 0, best = 0;
+    eigene.forEach(m => { laufend = m.loser === p.id ? laufend + 1 : 0; if (laufend > best) best = laufend; });
+    if (best > 1 && (!pech || best > pech[1])) pech = [p.id, best];
+  });
+  if (pech) F.push(["Längste Pechsträhne", `${nameOf(pech[0])} — ${pech[1]} Niederlagen am Stück`, "es wurde wieder besser"]);
+
+  // Revanche: verloren und im nächsten Duell gegen dieselbe Person gewonnen
+  const revanche = {};
+  players.forEach(p => {
+    const duelle = {};
+    [...matches]
+      .filter(m => m.winner === p.id || m.loser === p.id)
+      .sort((a,b) => new Date(a.created_at) - new Date(b.created_at))
+      .forEach(m => {
+        const geg = m.winner === p.id ? m.loser : m.winner;
+        if (duelle[geg] === "verloren" && m.winner === p.id) zaehl(revanche, p.id);
+        duelle[geg] = m.winner === p.id ? "gewonnen" : "verloren";
+      });
+  });
+  const rv = besteZeile(revanche);
+  if (rv) F.push(["Revanchefuchs", `${nameOf(rv[0])} — ${rv[1]}×`, "nach einer Niederlage im nächsten Duell zurückgeschlagen"]);
+
+  // Wochenende
+  const we = {}, alleTage = {};
+  matches.forEach(m => {
+    const tag = new Date(m.created_at).getDay();
+    [m.winner, m.loser].forEach(id => {
+      zaehl(alleTage, id);
+      if (tag === 0 || tag === 6) zaehl(we, id);
+    });
+  });
+  let wochenende = null;
+  Object.keys(alleTage).forEach(id => {
+    if (alleTage[id] < 4) return;
+    const q = (we[id] || 0) / alleTage[id];
+    if (!wochenende || q > wochenende[1]) wochenende = [id, q];
+  });
+  if (wochenende && wochenende[1] > 0) F.push(["Wochenendtyp", `${nameOf(wochenende[0])} — ${Math.round(wochenende[1]*100)} %`,
+    "so viele Partien fallen auf Samstag oder Sonntag"]);
 
   // Rekordabend
   const tage = {};
@@ -774,11 +832,6 @@ function fakten(){
   if (sn) F.push(["Größte Neugier", `${nameOf(sn[0])}`, `${sn[1]}× geschnüffelt`]);
 
   // Vielspieler*in und Kurzer Prozess
-  const gesamt = {};
-  matches.forEach(m => { zaehl(gesamt, m.winner); zaehl(gesamt, m.loser); });
-  const viel = besteZeile(gesamt);
-  if (viel) F.push(["Vielspieler*in", `${nameOf(viel[0])} — ${partien(viel[1])}`, "häufigste Beteiligung"]);
-
   let kurz = null;
   players.forEach(p => {
     const siege = matches.filter(m => m.winner === p.id);
@@ -789,6 +842,57 @@ function fakten(){
   });
   if (kurz && kurz[1] > 0) F.push(["Kurzer Prozess", `${nameOf(kurz[0])} — ${Math.round(kurz[1]*100)} %`,
     `${kurz[2]} von ${kurz[3]} Siegen waren Gammon oder Backgammon`]);
+
+  // --- aus dem Platzierungsverlauf ---
+  const { reihen, aktiv, laenge } = verlaufsRaenge("pts", false);
+  if (laenge >= 5 && aktiv.length >= 2){
+    const thron = {}, silber = {}, wechsel = {};
+    aktiv.forEach(id => {
+      const r = reihen[id];
+      thron[id] = r.filter(x => x.r === 1).length;
+      silber[id] = r.filter(x => x.r === 2).length;
+      let w = 0;
+      for (let i = 1; i < r.length; i++) if (r[i].r !== r[i-1].r) w++;
+      wechsel[id] = w;
+    });
+
+    const th = besteZeile(thron);
+    if (th && th[1] > 0) F.push(["Dauerregent*in", `${nameOf(th[0])} — ${partien(th[1])} lang`, "so viele Partien lang auf Platz eins"]);
+
+    const si = Object.entries(silber).sort((a,b) => b[1] - a[1])[0];
+    if (si && si[1] > 0){
+      const nieOben = thron[si[0]] === 0;
+      F.push(["Ewige*r Zweite*r", `${nameOf(si[0])} — ${partien(si[1])} lang`,
+        nieOben ? "auf Platz zwei, ohne je ganz oben gestanden zu haben" : "so lange auf Platz zwei"]);
+    }
+
+    const we2 = Object.entries(wechsel).sort((a,b) => b[1] - a[1]);
+    if (we2.length && we2[0][1] > 0) F.push(["Wackelkandidat*in", `${nameOf(we2[0][0])} — ${we2[0][1]} Platzwechsel`, "die unruhigste Kurve"]);
+    const fels = we2.filter(x => reihen[x[0]].length >= 5).sort((a,b) => a[1] - b[1])[0];
+    if (fels) F.push(["Fels in der Brandung", `${nameOf(fels[0])} — ${fels[1]} Platzwechsel`, "steht, wo er*sie steht"]);
+
+    // Auf- und Abstieg über die letzten zehn Partien
+    let auf = null, ab = null;
+    aktiv.forEach(id => {
+      const r = reihen[id];
+      if (r.length < 6) return;
+      const frueher = r[Math.max(0, r.length - 11)].r, jetzt = r[r.length - 1].r;
+      const diff = frueher - jetzt;
+      if (diff > 0 && (!auf || diff > auf[1])) auf = [id, diff, frueher, jetzt];
+      if (diff < 0 && (!ab || diff < ab[1])) ab = [id, diff, frueher, jetzt];
+    });
+    if (auf) F.push(["Aufsteiger*in", `${nameOf(auf[0])} — ${auf[2]}. auf ${auf[3]}.`, "Entwicklung über die letzten zehn Partien"]);
+    if (ab) F.push(["Abstieg", `${nameOf(ab[0])} — ${ab[2]}. auf ${ab[3]}.`, "Entwicklung über die letzten zehn Partien"]);
+  }
+
+  // --- Eckdaten ---
+  if (matches.length){
+    const chrono = [...matches].sort((a,b) => new Date(a.created_at) - new Date(b.created_at));
+    const erste = chrono[0];
+    const punkteGesamt = matches.reduce((n,m) => n + (m.mult || 1), 0);
+    F.push(["Seit wann das hier läuft", new Date(erste.created_at).toLocaleDateString("de-DE"),
+      `${partien(matches.length)} und ${punkteGesamt} vergebene Punkte seitdem`]);
+  }
 
   return F;
 }
@@ -1500,11 +1604,9 @@ document.addEventListener("click", async (e) => {
         sitzSetzen(aktuellesSpiel.id, wer === "2" ? 2 : 1);
       }
     }
-    $("gamesView").classList.add("hidden");
-    $("boardView").classList.remove("hidden");
+    zeigeAnsicht("boardView");
     kanalOeffnen(aktuellesSpiel.id);
     brettZeichnen();
-    window.scrollTo(0, 0);
     return;
   }
 
@@ -1550,25 +1652,32 @@ document.addEventListener("click", async (e) => {
   }
 });
 
-$("toGames").onclick = async () => {
-  $("mainView").classList.add("hidden");
-  $("gamesView").classList.remove("hidden");
-  await spieleLaden();
-  renderGames();
+function zeigeAnsicht(name){
+  ["mainView","statsView","gamesView","boardView"].forEach(v => {
+    const el = $(v);
+    if (el) el.classList.toggle("hidden", v !== name);
+  });
+  const reiter = name === "boardView" ? "gamesView" : name;
+  document.querySelectorAll(".tab").forEach(b => b.classList.toggle("aktiv", b.dataset.view === reiter));
+  if (name !== "boardView") kanalSchliessen();
+  if (name === "statsView") renderStats();
+  if (name === "gamesView") renderGames();
   window.scrollTo(0, 0);
-};
-$("backFromGames").onclick = () => {
-  $("gamesView").classList.add("hidden");
-  $("mainView").classList.remove("hidden");
-  window.scrollTo(0, 0);
-};
+}
+
+document.querySelectorAll(".tab").forEach(b => {
+  b.onclick = async () => {
+    const ziel = b.dataset.view;
+    if (ziel === "gamesView") await spieleLaden();
+    zeigeAnsicht(ziel);
+  };
+});
+
 $("backFromBoard").onclick = async () => {
-  kanalSchliessen();
-  $("boardView").classList.add("hidden");
-  $("gamesView").classList.remove("hidden");
   await spieleLaden();
-  renderGames();
+  zeigeAnsicht("gamesView");
 };
+
 $("startGame").onclick = async () => {
   const a = $("gMe").value, b = $("gYou").value;
   const zeig = (t) => { $("gMsg").textContent = t; $("gMsg").classList.toggle("hidden", !t); };
@@ -1602,20 +1711,6 @@ $("undoBtn").onclick = () => {
   gewaehlt = null;
   brettZeichnen();
 };
-
-$("toStats").onclick = () => {
-  $("mainView").classList.add("hidden");
-  $("statsView").classList.remove("hidden");
-  renderStats();
-  window.scrollTo(0, 0);
-};
-$("backFromStats").onclick = () => {
-  $("statsView").classList.add("hidden");
-  $("mainView").classList.remove("hidden");
-  window.scrollTo(0, 0);
-};
-$("statMode").onchange = zeichneChart;
-$("actWho").onchange = zeichneAktivitaet;
 
 $("devLine").onclick = () => {
   $("devSecret").classList.toggle("hidden");
