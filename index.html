@@ -38,6 +38,11 @@ h1{font-family:'Fraunces',Georgia,serif;font-weight:800;font-size:clamp(30px,7vw
 .strip{display:block;width:100%;height:48px;margin:0 0 26px}
 .stack{max-width:620px;margin:0 auto}
 .headrow{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.kopfknoepfe{display:flex;flex-direction:column;gap:6px;flex:none}
+#board{display:block;width:100%;height:auto;margin:4px 0 10px;touch-action:manipulation}
+.gzeile{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
+.gzeile:first-child{border-top:none}
+.gname{font-family:'Fraunces',Georgia,serif;font-size:17px}
 .statbtn{flex:none;margin-top:6px;background:var(--pearl);color:var(--bark);border:none;border-radius:3px;
   padding:8px 14px;font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.1em;
   text-transform:uppercase;cursor:pointer}
@@ -135,7 +140,10 @@ ul.log li.edit .btn{width:auto;padding:9px 16px}
       <div class="head-in">
         <div class="headrow">
           <h1>Backgammon-Liga</h1>
-          <button class="statbtn" id="toStats">Statistik</button>
+          <span class="kopfknoepfe">
+            <button class="statbtn" id="toGames">Spielen</button>
+            <button class="statbtn" id="toStats">Statistik</button>
+          </span>
         </div>
         <p class="sub">Jeder Sieg bringt Punkte: einfach 1, Gammon 2, Backgammon 3. Wer verliert, bekommt nichts abgezogen. Elo und Plus-Minus stehen unten als Nebenwertungen.</p>
       </div>
@@ -180,6 +188,49 @@ ul.log li.edit .btn{width:auto;padding:9px 16px}
       <div class="bar">
         <span class="tag">Zahlen aus dem Verlauf</span>
         <button class="ghost" id="backFromStats">Zurück zur Tabelle</button>
+      </div>
+    </div>
+
+    <div class="stack hidden" id="gamesView">
+      <div class="panel">
+        <p class="eyebrow">Neue Partie</p>
+        <div class="field">
+          <label for="gMe">Ich bin</label>
+          <select id="gMe"></select>
+        </div>
+        <div class="field">
+          <label for="gYou">Gegen</label>
+          <select id="gYou"></select>
+        </div>
+        <button class="btn" id="startGame">Partie starten</button>
+        <p class="err hidden" id="gMsg"></p>
+      </div>
+
+      <div class="panel">
+        <p class="eyebrow">Laufende Partien</p>
+        <div id="gameList"><p class="empty">Noch keine.</p></div>
+      </div>
+
+      <div class="bar">
+        <span class="tag">ohne Verdopplungswürfel</span>
+        <button class="ghost" id="backFromGames">Zurück zur Tabelle</button>
+      </div>
+    </div>
+
+    <div class="stack hidden" id="boardView">
+      <div class="panel">
+        <p class="eyebrow" id="boardTitel">Partie</p>
+        <svg id="board" viewBox="0 0 360 300" role="img" aria-label="Spielbrett"></svg>
+        <p class="preview" id="boardStatus"></p>
+        <div class="inline">
+          <button class="btn" id="rollBtn">Würfeln</button>
+          <button class="ghost" id="undoBtn">Zug zurück</button>
+        </div>
+        <p class="note" id="boardHinweis">Tipp auf einen eigenen Stein, dann auf das Ziel.</p>
+      </div>
+      <div class="bar">
+        <span class="tag" id="boardStand">—</span>
+        <button class="ghost" id="backFromBoard">Zurück zur Übersicht</button>
       </div>
     </div>
 
@@ -322,6 +373,7 @@ function unlock(){
   $("stand").textContent = "verbinde …";
   setTimeout(() => load(), 400);
   setInterval(() => load(3), 30000);
+  setInterval(abgleichen, 6000);
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden) load(3);
   });
@@ -1047,7 +1099,415 @@ $("addMatch").onclick = async () => {
   $("win").value = ""; $("los").value = ""; $("mult").value = "1"; say(""); refresh();
 };
 
+// === Regelwerk ===
+// Punkte 0..23. Spieler 1 (hell) zieht 23 -> 0, Heimat 0..5.
+// Spieler 2 (dunkel) zieht 0 -> 23, Heimat 18..23.
+function neuerStand(beginner){
+  return {
+    pts: [-2,0,0,0,0,5, 0,3,0,0,0,-5, 5,0,0,0,-3,0, -5,0,0,0,0,2],
+    bar: {1:0, 2:0},
+    off: {1:0, 2:0},
+    turn: beginner || 1,
+    wurf: [],
+    rest: [],
+    gewinner: null,
+    art: 1
+  };
+}
+
+function klon(st){
+  return { ...st, pts: st.pts.slice(), bar: {...st.bar}, off: {...st.off}, wurf: st.wurf.slice(), rest: st.rest.slice() };
+}
+
+function alleZuhause(st, sp){
+  if (st.bar[sp] > 0) return false;
+  for (let i = 0; i < 24; i++){
+    const v = st.pts[i];
+    if (sp === 1 && v > 0 && i > 5) return false;
+    if (sp === 2 && v < 0 && i < 18) return false;
+  }
+  return true;
+}
+
+function zuegeFuer(st, sp, die){
+  const z = [];
+  const dir = sp === 1 ? -1 : 1;
+  const eigen = (v) => sp === 1 ? v > 0 : v < 0;
+  const frei = (i) => sp === 1 ? st.pts[i] >= -1 : st.pts[i] <= 1;
+
+  if (st.bar[sp] > 0){
+    const ziel = sp === 1 ? 24 - die : die - 1;
+    if (ziel >= 0 && ziel < 24 && frei(ziel)) z.push({ von: "bar", zu: ziel, die });
+    return z;
+  }
+  for (let i = 0; i < 24; i++){
+    if (!eigen(st.pts[i])) continue;
+    const ziel = i + dir * die;
+    if (ziel >= 0 && ziel < 24){
+      if (frei(ziel)) z.push({ von: i, zu: ziel, die });
+      continue;
+    }
+    if (!alleZuhause(st, sp)) continue;
+    const pip = sp === 1 ? i + 1 : 24 - i;
+    if (die === pip){ z.push({ von: i, zu: "off", die }); continue; }
+    if (die > pip){
+      const weiterHinten = sp === 1
+        ? st.pts.slice(i + 1, 6).some(v => v > 0)
+        : st.pts.slice(18, i).some(v => v < 0);
+      if (!weiterHinten) z.push({ von: i, zu: "off", die });
+    }
+  }
+  return z;
+}
+
+function anwenden(st, zug){
+  const n = klon(st);
+  const sp = n.turn, geg = sp === 1 ? 2 : 1;
+  const vz = sp === 1 ? 1 : -1;
+
+  if (zug.von === "bar") n.bar[sp]--;
+  else n.pts[zug.von] -= vz;
+
+  if (zug.zu === "off"){
+    n.off[sp]++;
+  } else {
+    if (n.pts[zug.zu] === -vz){ n.pts[zug.zu] = 0; n.bar[geg]++; }
+    n.pts[zug.zu] += vz;
+  }
+
+  const i = n.rest.indexOf(zug.die);
+  if (i >= 0) n.rest.splice(i, 1);
+
+  if (n.off[sp] === 15){
+    n.gewinner = sp;
+    const verl = geg;
+    if (n.off[verl] > 0) n.art = 1;
+    else {
+      const imHaus = sp === 1
+        ? n.pts.slice(0, 6).some(v => v < 0)
+        : n.pts.slice(18, 24).some(v => v > 0);
+      n.art = (n.bar[verl] > 0 || imHaus) ? 3 : 2;
+    }
+    n.rest = [];
+  }
+  return n;
+}
+
+function tiefe(st, grenze){
+  if (!st.rest.length || grenze === 0) return 0;
+  let best = 0;
+  [...new Set(st.rest)].forEach(d => {
+    zuegeFuer(st, st.turn, d).forEach(z => {
+      const n = 1 + tiefe(anwenden(st, z), grenze - 1);
+      if (n > best) best = n;
+    });
+  });
+  return best;
+}
+
+function legaleZuege(st){
+  if (st.gewinner || !st.rest.length) return [];
+  const alle = [];
+  [...new Set(st.rest)].forEach(d => zuegeFuer(st, st.turn, d).forEach(z => alle.push(z)));
+  if (alle.length === 0) return [];
+  if (st.rest.length !== 2) return alle;            // Pasch: jeder Zug ist recht
+  const max = tiefe(st, 2);
+  if (max <= 1){
+    // Nur ein Würfel nutzbar: der höhere hat Vorrang
+    const nutzbar = alle.map(z => z.die);
+    const hoch = Math.max(...nutzbar);
+    return alle.filter(z => z.die === hoch);
+  }
+  return alle.filter(z => 1 + tiefe(anwenden(st, z), 1) >= max);
+}
+
+function wuerfeln(st, a, b){
+  const n = klon(st);
+  const w1 = a || (1 + Math.floor(Math.random() * 6));
+  const w2 = b || (1 + Math.floor(Math.random() * 6));
+  n.wurf = [w1, w2];
+  n.rest = w1 === w2 ? [w1, w1, w1, w1] : [w1, w2];
+  return n;
+}
+
+function zugBeenden(st){
+  const n = klon(st);
+  n.turn = n.turn === 1 ? 2 : 1;
+  n.wurf = []; n.rest = [];
+  return n;
+}
+// === Regelwerk Ende ===
+
+// --- Spielbetrieb ---
+let games = [], aktuellesSpiel = null, stand = null, gewaehlt = null, verlauf = [], kanal = null;
+
+const sitz = (gid) => { try { return Number(localStorage.getItem("bgl-sitz-" + gid)) || null; } catch(e){ return null; } };
+const sitzSetzen = (gid, n) => { try { localStorage.setItem("bgl-sitz-" + gid, String(n)); } catch(e){} };
+
+async function spieleLaden(){
+  try {
+    const r = await withTimeout(db.from("games").select("*").order("updated_at", { ascending: false }));
+    if (!r.error && r.data) games = r.data;
+  } catch (e) { /* stumm */ }
+}
+
+function renderGames(){
+  const box = $("gameList");
+  if (!box) return;
+  const mich = ich();
+  ["gMe","gYou"].forEach(id => {
+    const sel = $(id), keep = sel.value;
+    sel.innerHTML = players.map(p => `<option value="${p.id}"></option>`).join("");
+    [...sel.options].forEach((o,i) => o.textContent = players[i].name);
+    sel.value = keep || (id === "gMe" && mich ? mich : sel.value);
+  });
+
+  const offen = games.filter(g => g.status === "laufend");
+  if (offen.length === 0){
+    box.innerHTML = `<p class="empty">Noch keine laufende Partie.</p>`;
+    return;
+  }
+  box.innerHTML = offen.map(g => {
+    const st = g.state;
+    const dran = st.gewinner ? "beendet" : (st.turn === 1 ? "dran: hell" : "dran: dunkel");
+    return `<div class="gzeile">
+      <span><span class="gname" data-g1="${g.p1}"></span> gegen <span class="gname" data-g2="${g.p2}"></span><br>
+      <span class="meta">${dran}</span></span>
+      <button class="ghost" data-open="${g.id}">öffnen</button>
+    </div>`;
+  }).join("");
+  box.querySelectorAll("[data-g1]").forEach(el => el.textContent = nameOf(el.dataset.g1));
+  box.querySelectorAll("[data-g2]").forEach(el => el.textContent = nameOf(el.dataset.g2));
+}
+
+// --- Brett zeichnen ---
+const HELL = "#F5EFE2", DUNKEL = "#1E1712", HOLZ = "#C1946A", ZUNGE_A = "#4A3220", ZUNGE_B = "#8A6039";
+
+function punktGeometrie(i){
+  const rand = 10, barB = 16, bh = 118, H = 300;
+  const breite = (360 - 2*rand - barB) / 12;
+  let spalte, oben;
+  if (i >= 12){ spalte = i - 12; oben = true; }
+  else { spalte = 11 - i; oben = false; }
+  let x = rand + spalte * breite + (spalte >= 6 ? barB : 0);
+  return { x, breite, oben, hoehe: bh, yTop: oben ? 6 : H - 6 - bh };
+}
+
+function zeichneBrett(){
+  const svg = $("board");
+  if (!svg || !stand) return;
+  const meinSitz = aktuellesSpiel ? (sitz(aktuellesSpiel.id) || 0) : 0;
+  let g = `<rect x="0" y="0" width="360" height="300" fill="${HOLZ}"/>`;
+  g += `<rect x="${10 + 6*((360-36)/12)}" y="4" width="16" height="292" fill="${ZUNGE_A}" opacity="0.85"/>`;
+
+  for (let i = 0; i < 24; i++){
+    const G = punktGeometrie(i);
+    const farbe = i % 2 === 0 ? ZUNGE_A : ZUNGE_B;
+    const sp = G.x + 1, br = G.breite - 2;
+    const pfad = G.oben
+      ? `${sp},${G.yTop} ${sp+br},${G.yTop} ${sp+br/2},${G.yTop+G.hoehe}`
+      : `${sp},${G.yTop+G.hoehe} ${sp+br},${G.yTop+G.hoehe} ${sp+br/2},${G.yTop}`;
+    g += `<polygon points="${pfad}" fill="${farbe}" opacity="0.9"/>`;
+  }
+
+  const ziele = gewaehlt !== null ? legaleZuege(stand).filter(z => z.von === gewaehlt) : [];
+  ziele.forEach(z => {
+    if (z.zu === "off") return;
+    const G = punktGeometrie(z.zu);
+    g += `<rect x="${G.x}" y="${G.oben ? 4 : 300 - 4 - G.hoehe - 2}" width="${G.breite}" height="${G.hoehe + 4}" fill="#F2EADA" opacity="0.28" rx="3"/>`;
+  });
+
+  for (let i = 0; i < 24; i++){
+    const v = stand.pts[i];
+    if (!v) continue;
+    const G = punktGeometrie(i);
+    const anzahl = Math.min(Math.abs(v), 5);
+    for (let k = 0; k < anzahl; k++){
+      const cy = G.oben ? G.yTop + 11 + k*20 : G.yTop + G.hoehe - 11 - k*20;
+      g += `<circle cx="${(G.x + G.breite/2).toFixed(1)}" cy="${cy}" r="9.5" fill="${v > 0 ? HELL : DUNKEL}" stroke="#7A5231" stroke-width="0.8"/>`;
+    }
+    if (Math.abs(v) > 5){
+      const cy = G.oben ? G.yTop + 11 + 4*20 : G.yTop + G.hoehe - 11 - 4*20;
+      g += `<text x="${(G.x + G.breite/2).toFixed(1)}" y="${cy + 4}" text-anchor="middle" font-family="ui-monospace,monospace" font-size="11" fill="${v > 0 ? DUNKEL : HELL}">${Math.abs(v)}</text>`;
+    }
+  }
+
+  const barX = 10 + 6*((360-36)/12) + 8;
+  if (stand.bar[1]) g += `<circle cx="${barX}" cy="188" r="9.5" fill="${HELL}" stroke="#7A5231"/><text x="${barX}" y="192" text-anchor="middle" font-size="10" fill="${DUNKEL}">${stand.bar[1]}</text>`;
+  if (stand.bar[2]) g += `<circle cx="${barX}" cy="112" r="9.5" fill="${DUNKEL}" stroke="#7A5231"/><text x="${barX}" y="116" text-anchor="middle" font-size="10" fill="${HELL}">${stand.bar[2]}</text>`;
+
+  g += `<text x="6" y="152" font-family="ui-monospace,monospace" font-size="10" fill="#2A1D14">raus ${stand.off[1]}/${stand.off[2]}</text>`;
+
+  // Klickflächen
+  for (let i = 0; i < 24; i++){
+    const G = punktGeometrie(i);
+    g += `<rect x="${G.x}" y="${G.oben ? 0 : 300 - G.hoehe - 6}" width="${G.breite}" height="${G.hoehe + 6}" fill="transparent" data-pt="${i}"/>`;
+  }
+  g += `<rect x="${barX - 10}" y="100" width="20" height="100" fill="transparent" data-pt="bar"/>`;
+  if (gewaehlt !== null && legaleZuege(stand).some(z => z.von === gewaehlt && z.zu === "off")){
+    g += `<rect x="0" y="130" width="10" height="40" fill="#8C3226" opacity="0.8" data-pt="off"/>`;
+  }
+  svg.innerHTML = g;
+}
+
+function brettStatus(){
+  if (!stand || !aktuellesSpiel) return;
+  const meinSitz = sitz(aktuellesSpiel.id);
+  const namen = { 1: nameOf(aktuellesSpiel.p1), 2: nameOf(aktuellesSpiel.p2) };
+  $("boardTitel").textContent = `${namen[1]} (hell) gegen ${namen[2]} (dunkel)`;
+  if (stand.gewinner){
+    const art = stand.art === 3 ? "Backgammon" : stand.art === 2 ? "Gammon" : "einfacher Sieg";
+    $("boardStatus").textContent = `${namen[stand.gewinner]} gewinnt — ${art}`;
+    $("rollBtn").classList.add("hidden");
+    $("undoBtn").classList.add("hidden");
+    return;
+  }
+  $("rollBtn").classList.remove("hidden");
+  $("undoBtn").classList.remove("hidden");
+  const dran = stand.turn === meinSitz;
+  const wurf = stand.wurf.length ? ` — Wurf ${stand.wurf.join(" und ")}, offen: ${stand.rest.join(", ") || "nichts"}` : "";
+  $("boardStatus").textContent = dran
+    ? (stand.rest.length ? `Du bist dran${wurf}` : `Du bist dran — würfeln`)
+    : `${namen[stand.turn]} ist dran${wurf}`;
+  $("rollBtn").disabled = !dran || stand.rest.length > 0;
+  $("undoBtn").disabled = !dran || verlauf.length === 0;
+}
+
+async function spielSpeichern(fertig){
+  if (!aktuellesSpiel) return;
+  const neu = { state: stand, updated_at: new Date().toISOString() };
+  if (fertig) neu.status = "fertig";
+  try {
+    await withTimeout(db.from("games").update(neu).eq("id", aktuellesSpiel.id));
+  } catch (e) { say("Konnte den Zug nicht übertragen."); }
+  aktuellesSpiel.state = stand;
+}
+
+async function ergebnisEintragen(){
+  const sieger = stand.gewinner === 1 ? aktuellesSpiel.p1 : aktuellesSpiel.p2;
+  const verlierer = stand.gewinner === 1 ? aktuellesSpiel.p2 : aktuellesSpiel.p1;
+  try {
+    const { data } = await withTimeout(db.from("matches")
+      .insert({ winner: sieger, loser: verlierer, mult: stand.art, device: deviceId }).select());
+    if (data && data[0]) matches.push(data[0]);
+    refresh();
+  } catch (e) { /* stumm */ }
+}
+
+function brettZeichnen(){ zeichneBrett(); brettStatus(); }
+
+function standUebernehmen(frisch){
+  if (!frisch || !aktuellesSpiel || frisch.id !== aktuellesSpiel.id) return;
+  if (JSON.stringify(frisch.state) === JSON.stringify(stand)) return;
+  if (stand && stand.turn === sitz(aktuellesSpiel.id) && stand.rest.length) return;
+  aktuellesSpiel = frisch;
+  stand = frisch.state;
+  verlauf = []; gewaehlt = null;
+  brettZeichnen();
+  $("boardStand").textContent = "gerade eben";
+}
+
+function kanalOeffnen(gid){
+  kanalSchliessen();
+  try {
+    kanal = db.channel("spiel-" + gid)
+      .on("postgres_changes",
+          { event: "UPDATE", schema: "public", table: "games", filter: "id=eq." + gid },
+          (nachricht) => standUebernehmen(nachricht.new))
+      .subscribe();
+  } catch (e) { kanal = null; }   // ohne Realtime bleibt das Nachfragen im Takt
+}
+
+function kanalSchliessen(){
+  try { if (kanal) db.removeChannel(kanal); } catch (e) {}
+  kanal = null;
+}
+
+async function zugMachen(zug){
+  verlauf.push(klon(stand));
+  stand = anwenden(stand, zug);
+  gewaehlt = null;
+  if (stand.gewinner){
+    brettZeichnen();
+    await spielSpeichern(true);
+    await ergebnisEintragen();
+    return;
+  }
+  if (legaleZuege(stand).length === 0 && stand.rest.length === 0){
+    stand = zugBeenden(stand);
+    verlauf = [];
+    brettZeichnen();
+    await spielSpeichern(false);
+    return;
+  }
+  if (legaleZuege(stand).length === 0){
+    stand = zugBeenden(stand);
+    verlauf = [];
+    brettZeichnen();
+    await spielSpeichern(false);
+    return;
+  }
+  brettZeichnen();
+  await spielSpeichern(false);
+}
+
+async function abgleichen(){
+  if ($("boardView").classList.contains("hidden") || !aktuellesSpiel) return;
+  if (stand && stand.turn === sitz(aktuellesSpiel.id) && stand.rest.length) return;  // mitten im eigenen Zug nicht stören
+  try {
+    const r = await withTimeout(db.from("games").select("*").eq("id", aktuellesSpiel.id));
+    if (!r.error && r.data && r.data[0]){
+      const frisch = r.data[0];
+      if (JSON.stringify(frisch.state) !== JSON.stringify(stand)){
+        aktuellesSpiel = frisch;
+        stand = frisch.state;
+        verlauf = [];
+        gewaehlt = null;
+        brettZeichnen();
+      }
+      $("boardStand").textContent = "Stand " + new Date().toLocaleTimeString("de-DE",{hour:"2-digit",minute:"2-digit"});
+    }
+  } catch (e) { $("boardStand").textContent = "keine Verbindung"; }
+}
+
 document.addEventListener("click", async (e) => {
+  const pt = e.target.dataset?.pt;
+  if (pt !== undefined && stand && aktuellesSpiel){
+    const meinSitz = sitz(aktuellesSpiel.id);
+    if (stand.gewinner || stand.turn !== meinSitz || !stand.rest.length) return;
+    const feld = pt === "bar" ? "bar" : pt === "off" ? "off" : Number(pt);
+    const moeglich = legaleZuege(stand);
+    if (gewaehlt !== null){
+      const zug = moeglich.find(z => z.von === gewaehlt && z.zu === feld);
+      if (zug){ await zugMachen(zug); return; }
+    }
+    gewaehlt = moeglich.some(z => z.von === feld) ? feld : null;
+    brettZeichnen();
+    return;
+  }
+
+  const oeffne = e.target.dataset?.open;
+  if (oeffne){
+    aktuellesSpiel = games.find(g => g.id === oeffne);
+    if (!aktuellesSpiel) return;
+    stand = aktuellesSpiel.state; verlauf = []; gewaehlt = null;
+    if (!sitz(aktuellesSpiel.id)){
+      const mich = ich();
+      if (mich === aktuellesSpiel.p1) sitzSetzen(aktuellesSpiel.id, 1);
+      else if (mich === aktuellesSpiel.p2) sitzSetzen(aktuellesSpiel.id, 2);
+      else {
+        const wer = window.prompt(`Wer bist du?  1 = ${nameOf(aktuellesSpiel.p1)} (hell), 2 = ${nameOf(aktuellesSpiel.p2)} (dunkel)`, "1");
+        sitzSetzen(aktuellesSpiel.id, wer === "2" ? 2 : 1);
+      }
+    }
+    $("gamesView").classList.add("hidden");
+    $("boardView").classList.remove("hidden");
+    kanalOeffnen(aktuellesSpiel.id);
+    brettZeichnen();
+    window.scrollTo(0, 0);
+    return;
+  }
+
   const spy = e.target.dataset?.spy;
   if (spy){
     aufgedeckt.add(spy);
@@ -1089,6 +1549,59 @@ document.addEventListener("click", async (e) => {
     players = players.filter(x => x.id !== dp); refresh();
   }
 });
+
+$("toGames").onclick = async () => {
+  $("mainView").classList.add("hidden");
+  $("gamesView").classList.remove("hidden");
+  await spieleLaden();
+  renderGames();
+  window.scrollTo(0, 0);
+};
+$("backFromGames").onclick = () => {
+  $("gamesView").classList.add("hidden");
+  $("mainView").classList.remove("hidden");
+  window.scrollTo(0, 0);
+};
+$("backFromBoard").onclick = async () => {
+  kanalSchliessen();
+  $("boardView").classList.add("hidden");
+  $("gamesView").classList.remove("hidden");
+  await spieleLaden();
+  renderGames();
+};
+$("startGame").onclick = async () => {
+  const a = $("gMe").value, b = $("gYou").value;
+  const zeig = (t) => { $("gMsg").textContent = t; $("gMsg").classList.toggle("hidden", !t); };
+  if (!a || !b || a === b) return zeig("Zwei verschiedene Personen wählen.");
+  const st = neuerStand(1 + Math.floor(Math.random() * 2));
+  try {
+    const r = await withTimeout(db.from("games").insert({ p1: a, p2: b, state: st }).select());
+    if (r.error) return zeig("Konnte die Partie nicht anlegen: " + r.error.message);
+    const g = r.data[0];
+    games.unshift(g);
+    sitzSetzen(g.id, 1);
+    zeig("");
+    renderGames();
+  } catch (e) { zeig(e.message); }
+};
+$("rollBtn").onclick = async () => {
+  if (!stand || stand.rest.length || stand.turn !== sitz(aktuellesSpiel.id)) return;
+  stand = wuerfeln(stand);
+  verlauf = [];
+  if (legaleZuege(stand).length === 0){
+    brettZeichnen();
+    await new Promise(r => setTimeout(r, 900));
+    stand = zugBeenden(stand);
+  }
+  brettZeichnen();
+  await spielSpeichern(false);
+};
+$("undoBtn").onclick = () => {
+  if (!verlauf.length) return;
+  stand = verlauf.pop();
+  gewaehlt = null;
+  brettZeichnen();
+};
 
 $("toStats").onclick = () => {
   $("mainView").classList.add("hidden");
