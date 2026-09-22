@@ -1206,21 +1206,42 @@ $("addMatch").onclick = async () => {
 // === Regelwerk ===
 // Punkte 0..23. Spieler 1 (hell) zieht 23 -> 0, Heimat 0..5.
 // Spieler 2 (dunkel) zieht 0 -> 23, Heimat 18..23.
-function neuerStand(beginner){
+function neuerStand(){
   return {
     pts: [-2,0,0,0,0,5, 0,3,0,0,0,-5, 5,0,0,0,-3,0, -5,0,0,0,0,2],
     bar: {1:0, 2:0},
     off: {1:0, 2:0},
-    turn: beginner || 1,
+    turn: 0,
     wurf: [],
     rest: [],
     gewinner: null,
-    art: 1
+    art: 1,
+    phase: "eroeffnung",
+    erst: {1: null, 2: null}
   };
 }
 
+function eroeffnungWuerfeln(st, sp, augen){
+  const n = klon(st);
+  if (n.phase !== "eroeffnung" || n.erst[sp] != null) return n;
+  n.erst[sp] = augen || (1 + Math.floor(Math.random() * 6));
+  const a = n.erst[1], b = n.erst[2];
+  if (a != null && b != null){
+    if (a === b){
+      n.erst = {1: null, 2: null};
+    } else {
+      n.turn = a > b ? 1 : 2;
+      n.wurf = [a, b];
+      n.rest = [a, b];
+      n.phase = "spiel";
+    }
+  }
+  return n;
+}
+
 function klon(st){
-  return { ...st, pts: st.pts.slice(), bar: {...st.bar}, off: {...st.off}, wurf: st.wurf.slice(), rest: st.rest.slice() };
+  return { ...st, pts: st.pts.slice(), bar: {...st.bar}, off: {...st.off},
+           wurf: st.wurf.slice(), rest: st.rest.slice(), erst: {...(st.erst || {1:null,2:null})} };
 }
 
 function alleZuhause(st, sp){
@@ -1366,6 +1387,7 @@ function renderGames(){
     sel.value = keep || (id === "gMe" && mich ? mich : sel.value);
   });
 
+  const darfLoeschen = !!mich && nameOf(mich).toLowerCase().includes("anton");
   const offen = games.filter(g => g.status === "laufend");
   if (offen.length === 0){
     box.innerHTML = `<p class="empty">Noch keine laufende Partie.</p>`;
@@ -1377,7 +1399,10 @@ function renderGames(){
     return `<div class="gzeile">
       <span><span class="gname" data-g1="${g.p1}"></span> gegen <span class="gname" data-g2="${g.p2}"></span><br>
       <span class="meta">${dran}</span></span>
-      <button class="ghost" data-open="${g.id}">öffnen</button>
+      <span style="display:flex;gap:8px;align-items:center">
+        <button class="ghost" data-open="${g.id}">öffnen</button>
+        ${darfLoeschen ? `<button class="ghost" data-delgame="${g.id}">abbrechen</button>` : ``}
+      </span>
     </div>`;
   }).join("");
   box.querySelectorAll("[data-g1]").forEach(el => el.textContent = nameOf(el.dataset.g1));
@@ -1468,6 +1493,19 @@ function brettStatus(){
   }
   $("rollBtn").classList.remove("hidden");
   $("undoBtn").classList.remove("hidden");
+
+  if (stand.phase === "eroeffnung"){
+    const meins = stand.erst[meinSitz], seins = stand.erst[meinSitz === 1 ? 2 : 1];
+    const teil = (v) => v == null ? "noch nicht" : v;
+    $("boardStatus").textContent =
+      `Eröffnungswurf — du: ${teil(meins)}, ${namen[meinSitz === 1 ? 2 : 1]}: ${teil(seins)}`
+      + (meins != null && seins != null ? " — gleich hoch, noch einmal" : "");
+    $("rollBtn").disabled = meins != null;
+    $("undoBtn").disabled = true;
+    $("boardHinweis").textContent = "Beide werfen einen Würfel. Wer höher wirft, beginnt und spielt beide Augen.";
+    return;
+  }
+  $("boardHinweis").textContent = "Tipp auf einen eigenen Stein, dann auf das Ziel.";
   const dran = stand.turn === meinSitz;
   const wurf = stand.wurf.length ? ` — Wurf ${stand.wurf.join(" und ")}, offen: ${stand.rest.join(", ") || "nichts"}` : "";
   $("boardStatus").textContent = dran
@@ -1500,10 +1538,18 @@ async function ergebnisEintragen(){
 
 function brettZeichnen(){ zeichneBrett(); brettStatus(); }
 
+// Der eigene angefangene Zug wird geschützt — aber nur, solange er wirklich läuft.
+function eigenerZugLaeuft(fremderZug){
+  if (!stand || !aktuellesSpiel) return false;
+  if (stand.turn !== sitz(aktuellesSpiel.id)) return false;
+  if (fremderZug !== undefined && fremderZug !== stand.turn) return false;
+  return verlauf.length > 0;
+}
+
 function standUebernehmen(frisch){
   if (!frisch || !aktuellesSpiel || frisch.id !== aktuellesSpiel.id) return;
   if (JSON.stringify(frisch.state) === JSON.stringify(stand)) return;
-  if (stand && stand.turn === sitz(aktuellesSpiel.id) && stand.rest.length) return;
+  if (eigenerZugLaeuft(frisch.state && frisch.state.turn)) return;
   aktuellesSpiel = frisch;
   stand = frisch.state;
   verlauf = []; gewaehlt = null;
@@ -1555,14 +1601,46 @@ async function zugMachen(zug){
   await spielSpeichern(false);
 }
 
+async function frischerStand(){
+  try {
+    const r = await withTimeout(db.from("games").select("*").eq("id", aktuellesSpiel.id));
+    if (!r.error && r.data && r.data[0]) return r.data[0].state;
+  } catch (e) {}
+  return null;
+}
+
+// Eröffnungswurf: beide schreiben in dieselbe Zeile, deshalb auf frischem Stand aufsetzen
+async function eroeffnungSenden(meinSitz){
+  const augen = 1 + Math.floor(Math.random() * 6);
+  for (let versuch = 0; versuch < 4; versuch++){
+    const basis = (await frischerStand()) || stand;
+    if (basis.phase !== "eroeffnung"){ stand = basis; brettZeichnen(); return; }
+    if (versuch > 0 && basis.erst[meinSitz] != null){ stand = basis; brettZeichnen(); return; }
+
+    stand = eroeffnungWuerfeln(basis, meinSitz, augen);
+    brettZeichnen();
+    await spielSpeichern(false);
+    await new Promise(r => setTimeout(r, 180 + Math.random() * 250));
+
+    const kontrolle = await frischerStand();
+    if (!kontrolle) return;
+    const gleichstand = kontrolle.phase === "eroeffnung" && kontrolle.erst[1] == null && kontrolle.erst[2] == null;
+    if (kontrolle.phase === "spiel" || gleichstand || kontrolle.erst[meinSitz] === augen){
+      stand = kontrolle;
+      brettZeichnen();
+      return;
+    }
+  }
+}
+
 async function abgleichen(){
   if ($("boardView").classList.contains("hidden") || !aktuellesSpiel) return;
-  if (stand && stand.turn === sitz(aktuellesSpiel.id) && stand.rest.length) return;  // mitten im eigenen Zug nicht stören
+  if (eigenerZugLaeuft()) return;   // mitten im eigenen Zug nicht stören
   try {
     const r = await withTimeout(db.from("games").select("*").eq("id", aktuellesSpiel.id));
     if (!r.error && r.data && r.data[0]){
       const frisch = r.data[0];
-      if (JSON.stringify(frisch.state) !== JSON.stringify(stand)){
+      if (JSON.stringify(frisch.state) !== JSON.stringify(stand) && !eigenerZugLaeuft(frisch.state && frisch.state.turn)){
         aktuellesSpiel = frisch;
         stand = frisch.state;
         verlauf = [];
@@ -1587,6 +1665,26 @@ document.addEventListener("click", async (e) => {
     }
     gewaehlt = moeglich.some(z => z.von === feld) ? feld : null;
     brettZeichnen();
+    return;
+  }
+
+  const weg = e.target.dataset?.delgame;
+  if (weg){
+    const g = games.find(x => x.id === weg);
+    if (!g) return;
+    if (!window.confirm(`Partie ${nameOf(g.p1)} gegen ${nameOf(g.p2)} abbrechen? Sie verschwindet aus der Liste und wird nicht gewertet.`)) return;
+    try {
+      const r = await withTimeout(db.from("games")
+        .update({ status: "abgebrochen", updated_at: new Date().toISOString() }).eq("id", weg));
+      if (r && r.error){ window.alert("Hat nicht geklappt: " + r.error.message); return; }
+    } catch (err) { window.alert(err.message); return; }
+    games = games.filter(x => x.id !== weg);
+    if (aktuellesSpiel && aktuellesSpiel.id === weg){
+      kanalSchliessen();
+      aktuellesSpiel = null; stand = null;
+      zeigeAnsicht("gamesView");
+    }
+    renderGames();
     return;
   }
 
@@ -1682,19 +1780,31 @@ $("startGame").onclick = async () => {
   const a = $("gMe").value, b = $("gYou").value;
   const zeig = (t) => { $("gMsg").textContent = t; $("gMsg").classList.toggle("hidden", !t); };
   if (!a || !b || a === b) return zeig("Zwei verschiedene Personen wählen.");
-  const st = neuerStand(1 + Math.floor(Math.random() * 2));
+  const st = neuerStand();
+  const tausch = Math.random() < 0.5;
+  const hell = tausch ? b : a, dunkel = tausch ? a : b;
   try {
-    const r = await withTimeout(db.from("games").insert({ p1: a, p2: b, state: st }).select());
+    const r = await withTimeout(db.from("games").insert({ p1: hell, p2: dunkel, state: st }).select());
     if (r.error) return zeig("Konnte die Partie nicht anlegen: " + r.error.message);
     const g = r.data[0];
     games.unshift(g);
-    sitzSetzen(g.id, 1);
+    sitzSetzen(g.id, hell === a ? 1 : 2);
     zeig("");
     renderGames();
   } catch (e) { zeig(e.message); }
 };
 $("rollBtn").onclick = async () => {
-  if (!stand || stand.rest.length || stand.turn !== sitz(aktuellesSpiel.id)) return;
+  if (!stand || !aktuellesSpiel) return;
+  const meinSitz = sitz(aktuellesSpiel.id);
+
+  if (stand.phase === "eroeffnung"){
+    if (stand.erst[meinSitz] != null) return;
+    $("rollBtn").disabled = true;
+    await eroeffnungSenden(meinSitz);
+    return;
+  }
+
+  if (stand.rest.length || stand.turn !== meinSitz) return;
   stand = wuerfeln(stand);
   verlauf = [];
   if (legaleZuege(stand).length === 0){
