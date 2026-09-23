@@ -1267,7 +1267,10 @@ $("addMatch").onclick = async () => {
 // Punkte 0..23. Spieler 1 (hell) zieht 23 -> 0, Heimat 0..5.
 // Spieler 2 (dunkel) zieht 0 -> 23, Heimat 18..23.
 function leereStats(){
-  return { wuerfe: 0, pasch: 0, wuerfel: 0, augen: 0, bewegung: 0, geschlagen: 0, blockiert: 0 };
+  return { wuerfe: 0, pasch: 0, wuerfel: 0, augen: 0, bewegung: 0, geschlagen: 0, blockiert: 0,
+           ungenutzt: 0, ungenutztErwartet: 0,
+           rausChancen: 0, rausErwartet: 0, rausTreffer: 0, rausTrefferP: 0,
+           rausVerpasst: 0, rausVerpasstP: 0, rausLiegenLassen: 0 };
 }
 
 function neuerStand(){
@@ -1415,6 +1418,67 @@ function legaleZuege(st){
     return alle.filter(z => z.die === hoch);
   }
   return alle.filter(z => 1 + tiefe(anwenden(st, z), 1) >= max);
+}
+
+// --- Wahrscheinlichkeiten für die Statistik ---
+function standSchluessel(s){ return s.pts.join(",") + "|" + s.bar[1] + "," + s.bar[2] + "|" + s.rest.join(""); }
+
+// Wie viele Würfel lassen sich mit diesem Wurf höchstens setzen?
+function maxNutzbar(st){
+  const ziel = st.rest.length;
+  let best = 0;
+  const gesehen = new Set();
+  (function dfs(s, tiefe){
+    if (best === ziel) return;
+    if (tiefe > best) best = tiefe;
+    if (!s.rest.length || s.gewinner) return;
+    const k = standSchluessel(s);
+    if (gesehen.has(k)) return;
+    gesehen.add(k);
+    for (const d of new Set(s.rest)){
+      for (const z of zuegeFuer(s, s.turn, d)){
+        dfs(anwenden(s, z), tiefe + 1);
+        if (best === ziel) return;
+      }
+    }
+  })(st, 0);
+  return best;
+}
+
+// Gibt es mit diesem Wurf eine erlaubte Zugfolge, die einen Stein rauswirft?
+function kannSchlagen(st){
+  const geg = st.turn === 1 ? 2 : 1;
+  const start = st.bar[geg];
+  let gefunden = false;
+  const gesehen = new Set();
+  (function dfs(s){
+    if (gefunden) return;
+    if (s.bar[geg] > start){ gefunden = true; return; }
+    const k = standSchluessel(s);
+    if (gesehen.has(k)) return;
+    gesehen.add(k);
+    for (const z of legaleZuege(s)){ dfs(anwenden(s, z)); if (gefunden) return; }
+  })(st);
+  return gefunden;
+}
+
+function hatOffenenStein(st){
+  return st.pts.some(v => st.turn === 1 ? v === -1 : v === 1);
+}
+
+// Vor dem Wurf: alle 36 Würfe durchspielen
+function wurfAnalyse(st){
+  let pTreffer = 0, erwUngenutzt = 0;
+  const blot = hatOffenenStein(st);
+  for (let a = 1; a <= 6; a++){
+    for (let b = a; b <= 6; b++){
+      const gewicht = (a === b ? 1 : 2) / 36;
+      const s = wuerfeln(st, a, b);
+      erwUngenutzt += gewicht * (s.rest.length - maxNutzbar(s));
+      if (blot && kannSchlagen(s)) pTreffer += gewicht;
+    }
+  }
+  return { p: pTreffer, erwUngenutzt };
 }
 
 function wuerfeln(st, a, b){
@@ -1805,22 +1869,37 @@ function ergebnisZeigen(){
     return;
   }
   const schnitt = (x) => x.wuerfel ? x.augen / x.wuerfel : 0;
+  const pr = (summe, n) => n ? Math.round(summe / n * 100) + " %" : "–";
+  const glueck = (x) => x.rausTreffer - x.rausErwartet;
   const zeilen = [
     ["Würfe", a.wuerfe, b.wuerfe, null],
     ["Pasche", a.pasch, b.pasch, "mehr"],
     ["Ø pro Würfel", schnitt(a), schnitt(b), "mehr", true],
     ["Augen gezogen", a.bewegung, b.bewegung, "mehr"],
-    ["geschlagen", a.geschlagen, b.geschlagen, "mehr"],
     ["ohne Zug", a.blockiert, b.blockiert, "weniger"],
+    ["Würfel ohne Nutzen", a.ungenutzt, b.ungenutzt, "weniger"],
+    ["… zu erwarten gewesen", a.ungenutztErwartet, b.ungenutztErwartet, null, true],
+    ["Rauswurfchancen", a.rausChancen, b.rausChancen, null],
+    ["rausgeworfen", a.rausTreffer, b.rausTreffer, "mehr"],
+    ["… Ø Wahrscheinlichkeit", pr(a.rausTrefferP, a.rausTreffer), pr(b.rausTrefferP, b.rausTreffer), null],
+    ["verpasst", a.rausVerpasst, b.rausVerpasst, "weniger"],
+    ["… Ø Wahrscheinlichkeit", pr(a.rausVerpasstP, a.rausVerpasst), pr(b.rausVerpasstP, b.rausVerpasst), null],
+    ["… Zahl gewürfelt, nicht geschlagen", a.rausLiegenLassen, b.rausLiegenLassen, null],
+    ["Glück beim Rauswerfen", glueck(a), glueck(b), "mehr", "vorzeichen"],
   ];
-  const fmt = (v, komma) => komma ? v.toFixed(2).replace(".", ",") : String(v);
+  const fmt = (v, komma) => {
+    if (typeof v === "string") return v;
+    if (komma === "vorzeichen") return (v > 0 ? "+" : v < 0 ? "−" : "±") + Math.abs(v).toFixed(1).replace(".", ",");
+    return komma ? v.toFixed(komma === true && Math.abs(v) < 10 ? 1 : 2).replace(".", ",") : String(v);
+  };
   let h = `<div class="stattab"><span class="k"></span><span class="k z" data-n="1"></span><span class="k z" data-n="2"></span>`;
   zeilen.forEach(([titel, x, y, richtung, komma]) => {
-    const besserA = richtung === "mehr" ? x > y : richtung === "weniger" ? x < y : false;
-    const besserB = richtung === "mehr" ? y > x : richtung === "weniger" ? y < x : false;
+    const zahl = (v) => typeof v === "number";
+    const besserA = zahl(x) && zahl(y) && (richtung === "mehr" ? x > y : richtung === "weniger" ? x < y : false);
+    const besserB = zahl(x) && zahl(y) && (richtung === "mehr" ? y > x : richtung === "weniger" ? y < x : false);
     h += `<span>${titel}</span><span class="z ${besserA ? "besser" : ""}">${fmt(x, komma)}</span><span class="z ${besserB ? "besser" : ""}">${fmt(y, komma)}</span>`;
   });
-  h += `</div>`;
+  h += `</div><p class="note" style="margin-top:10px">„Glück beim Rauswerfen“: tatsächliche Treffer minus die zu erwartenden. Plus heißt, die Würfel waren gnädiger als der Schnitt. „Zahl gewürfelt, nicht geschlagen“ zählt Züge, in denen ein Rauswurf möglich gewesen wäre, aber ein anderer Zug gewählt wurde.</p>`;
   $("endStats").innerHTML = h;
   $("endStats").querySelector('[data-n="1"]').textContent = namen[1];
   $("endStats").querySelector('[data-n="2"]').textContent = namen[2];
@@ -1968,25 +2047,44 @@ async function zugMachen(zug){
   verlauf.push(klon(stand));
   stand = anwenden(stand, zug);
   gewaehlt = null;
+  if (stand.gewinner){ await partieAbschliessen(); return; }   // letzter Stein draußen: sofort Schluss
   brettZeichnen();
   await spielSpeichern(false);
+}
+
+async function partieAbschliessen(){
+  rauswurfVerbuchen();
+  verlauf = [];
+  await spielSpeichern(true);
+  brettZeichnen();
+  await ergebnisEintragen();
 }
 
 function zugFertig(){
   return !!stand && stand.wurf.length > 0 && (stand.gewinner || legaleZuege(stand).length === 0);
 }
 
+function rauswurfVerbuchen(){
+  const info = stand.zugInfo;
+  if (!info || !(info.p > 0)) return;
+  const z = stand.stats[stand.turn];
+  const getroffen = z.geschlagen > info.geschlagenVorher;
+  z.rausChancen += 1;
+  z.rausErwartet += info.p;
+  if (getroffen){ z.rausTreffer += 1; z.rausTrefferP += info.p; }
+  else {
+    z.rausVerpasst += 1; z.rausVerpasstP += info.p;
+    if (info.moeglich) z.rausLiegenLassen += 1;
+  }
+  stand.zugInfo = null;
+}
+
 async function zugAbschliessen(){
   if (!stand || !aktuellesSpiel) return;
   if (stand.turn !== sitz(aktuellesSpiel.id) || !zugFertig()) return;
   $("endBtn").disabled = true;
-  if (stand.gewinner){
-    verlauf = [];
-    await spielSpeichern(true);
-    brettZeichnen();
-    await ergebnisEintragen();
-    return;
-  }
+  rauswurfVerbuchen();
+  if (stand.gewinner){ await partieAbschliessen(); return; }
   if (verlauf.length === 0 && stand.stats && stand.stats[stand.turn]) stand.stats[stand.turn].blockiert += 1;
   stand = zugBeenden(stand);
   verlauf = [];
@@ -2217,7 +2315,19 @@ $("rollBtn").onclick = async () => {
   }
 
   if (stand.wurf.length || stand.turn !== meinSitz) return;
+  let analyse = { p: 0, erwUngenutzt: 0 };
+  try { analyse = wurfAnalyse(stand); } catch (e) {}
   stand = wuerfeln(stand);
+  const z = stand.stats[stand.turn];
+  try {
+    z.ungenutzt += stand.rest.length - maxNutzbar(stand);
+    z.ungenutztErwartet += analyse.erwUngenutzt;
+    stand.zugInfo = {
+      p: analyse.p,
+      moeglich: analyse.p > 0 ? kannSchlagen(stand) : false,
+      geschlagenVorher: z.geschlagen
+    };
+  } catch (e) { stand.zugInfo = null; }
   verlauf = [];
   brettZeichnen();
   await spielSpeichern(false);
