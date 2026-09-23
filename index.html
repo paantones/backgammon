@@ -750,9 +750,9 @@ function fakten(){
   });
 
   const g = besteZeile(gammon);
-  if (g) F.push(["Gammon-Spezialist*in", `${nameOf(g[0])} — ${g[1]}×`, "Sieg, bevor die andere Seite einen Stein herausgespielt hat"]);
+  if (g) F.push(["Gammon-Spezialist*in", `${nameOf(g[0])} — ${g[1]}×`, "kein Stein der Gegenseite draußen, aber alle daheim"]);
   const b = besteZeile(backg);
-  if (b) F.push(["Backgammon-König*in", `${nameOf(b[0])} — ${b[1]}×`, "der dreifache Sieg, die seltenste Sorte"]);
+  if (b) F.push(["Backgammon-König*in", `${nameOf(b[0])} — ${b[1]}×`, "kein Stein draußen und nicht alle daheim"]);
 
   const pa = besteZeile(paare);
   if (pa && pa[1] > 1){
@@ -1344,10 +1344,11 @@ function anwenden(st, zug){
     const verl = geg;
     if (n.off[verl] > 0) n.art = 1;
     else {
-      const imHaus = sp === 1
-        ? n.pts.slice(0, 6).some(v => v < 0)
-        : n.pts.slice(18, 24).some(v => v > 0);
-      n.art = (n.bar[verl] > 0 || imHaus) ? 3 : 2;
+      // Hausregel: Backgammon, sobald die Verliererseite noch nicht alle Steine daheim hat
+      const draussen = sp === 1
+        ? n.pts.slice(0, 18).some(v => v < 0)
+        : n.pts.slice(6, 24).some(v => v > 0);
+      n.art = (n.bar[verl] > 0 || draussen) ? 3 : 2;
     }
     n.rest = [];
   }
