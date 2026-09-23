@@ -44,6 +44,11 @@ h1{font-family:'Fraunces',Georgia,serif;font-weight:800;font-size:clamp(30px,7vw
   font-size:12px;letter-spacing:.12em;text-transform:uppercase;padding:14px 4px;cursor:pointer;
   border-bottom:3px solid transparent}
 .tab.aktiv{color:var(--pearl);background:var(--bark);border-bottom-color:var(--pearl)}
+.zaehler{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;
+  margin-left:7px;padding:0 5px;border-radius:9px;background:#C7332A;color:#fff;
+  font-size:11px;font-weight:600;letter-spacing:0;vertical-align:middle}
+.punkt{display:inline-block;width:9px;height:9px;border-radius:50%;background:#C7332A;margin-right:7px;
+  vertical-align:middle}
 .tab:focus-visible{outline:2px solid var(--pearl);outline-offset:-3px}
 #board{display:block;width:100%;height:auto;margin:4px 0 10px;touch-action:manipulation}
 .gzeile{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
@@ -145,7 +150,7 @@ ul.log li.edit .btn{width:auto;padding:9px 16px}
     <nav class="tabs" id="tabs">
       <button class="tab aktiv" data-view="mainView">Liga</button>
       <button class="tab" data-view="statsView">Statistik</button>
-      <button class="tab" data-view="gamesView">Spielen</button>
+      <button class="tab" data-view="gamesView">Spielen<span class="zaehler hidden" id="dranZaehler">0</span></button>
     </nav>
     <div class="head">
       <div class="head-in">
@@ -372,6 +377,8 @@ function unlock(){
   $("stand").textContent = "verbinde …";
   setTimeout(() => load(), 400);
   setInterval(() => load(3), 30000);
+  spieleLaden();
+  setInterval(spieleLaden, 20000);
   setInterval(abgleichen, 6000);
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden) load(3);
@@ -1374,6 +1381,41 @@ async function spieleLaden(){
     const r = await withTimeout(db.from("games").select("*").order("updated_at", { ascending: false }));
     if (!r.error && r.data) games = r.data;
   } catch (e) { /* stumm */ }
+  dranZaehlen();
+}
+
+function meinPlatz(g){
+  const gespeichert = sitz(g.id);
+  if (gespeichert) return gespeichert;
+  const mich = ich();
+  if (mich && g.p1 === mich) return 1;
+  if (mich && g.p2 === mich) return 2;
+  return null;
+}
+
+function istDran(g){
+  if (!g || g.status !== "laufend" || !g.state) return false;
+  const platz = meinPlatz(g);
+  if (!platz) return false;
+  const st = g.state;
+  if (st.gewinner) return false;
+  if (st.phase === "eroeffnung") return !st.erst || st.erst[platz] == null;
+  return st.turn === platz;
+}
+
+function dranZaehlen(){
+  const n = games.filter(istDran).length;
+  const el = $("dranZaehler");
+  if (el){
+    el.textContent = String(n);
+    el.classList.toggle("hidden", n === 0);
+  }
+  try {
+    if (navigator.setAppBadge){
+      if (n > 0) navigator.setAppBadge(n); else navigator.clearAppBadge();
+    }
+  } catch (e) { /* nicht überall vorhanden */ }
+  return n;
 }
 
 function renderGames(){
@@ -1388,6 +1430,7 @@ function renderGames(){
   });
 
   const darfLoeschen = !!mich && nameOf(mich).toLowerCase().includes("anton");
+  dranZaehlen();
   const offen = games.filter(g => g.status === "laufend");
   if (offen.length === 0){
     box.innerHTML = `<p class="empty">Noch keine laufende Partie.</p>`;
@@ -1395,9 +1438,14 @@ function renderGames(){
   }
   box.innerHTML = offen.map(g => {
     const st = g.state;
-    const dran = st.gewinner ? "beendet" : (st.turn === 1 ? "dran: hell" : "dran: dunkel");
+    const platz = meinPlatz(g);
+    const binDran = istDran(g);
+    let dran;
+    if (st.gewinner) dran = "beendet";
+    else if (st.phase === "eroeffnung") dran = binDran ? "Eröffnungswurf: du" : `Eröffnungswurf: ${nameOf(st.erst && st.erst[1] == null ? g.p1 : g.p2)}`;
+    else dran = `dran: ${nameOf(st.turn === 1 ? g.p1 : g.p2)}`;
     return `<div class="gzeile">
-      <span><span class="gname" data-g1="${g.p1}"></span> gegen <span class="gname" data-g2="${g.p2}"></span><br>
+      <span>${binDran ? `<span class="punkt"></span>` : ``}<span class="gname" data-g1="${g.p1}"></span> gegen <span class="gname" data-g2="${g.p2}"></span><br>
       <span class="meta">${dran}</span></span>
       <span style="display:flex;gap:8px;align-items:center">
         <button class="ghost" data-open="${g.id}">öffnen</button>
@@ -1566,6 +1614,9 @@ async function spielSpeichern(fertig){
     await withTimeout(db.from("games").update(neu).eq("id", aktuellesSpiel.id));
   } catch (e) { say("Konnte den Zug nicht übertragen."); }
   aktuellesSpiel.state = stand;
+  const eintrag = games.find(g => g.id === aktuellesSpiel.id);
+  if (eintrag){ eintrag.state = stand; if (fertig) eintrag.status = "fertig"; }
+  dranZaehlen();
 }
 
 async function ergebnisEintragen(){
