@@ -51,6 +51,22 @@ h1{font-family:'Fraunces',Georgia,serif;font-weight:800;font-size:clamp(30px,7vw
   vertical-align:middle}
 .tab:focus-visible{outline:2px solid var(--pearl);outline-offset:-3px}
 #board{display:block;width:100%;height:auto;margin:4px 0 10px;touch-action:manipulation}
+.brettbox{position:relative}
+#blasen{position:absolute;inset:0;pointer-events:none}
+.blase{position:absolute;max-width:62%;background:var(--pearl);color:var(--ink);
+  border:1px solid #7A5231;border-radius:12px;padding:7px 11px;font-size:14px;
+  font-family:'Fraunces',Georgia,serif;box-shadow:0 2px 8px rgba(0,0,0,.28)}
+.blase.oben{top:8%;left:6%}
+.blase.unten{bottom:8%;right:6%;background:var(--horn);color:var(--pearl);border-color:#2A1D14}
+.blase small{display:block;font-family:'IBM Plex Mono',monospace;font-size:10px;opacity:.7;margin-bottom:2px}
+.schnellreihe{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:12px}
+.schnellreihe button{background:var(--field);border:1px solid var(--line);border-radius:14px;
+  padding:6px 12px;font-family:'Fraunces',Georgia,serif;font-size:14px;color:var(--ink);cursor:pointer}
+.schnellreihe button:hover{background:var(--pearl)}
+.chatliste{max-height:180px;overflow-y:auto;margin-bottom:12px}
+.chatzeile{padding:6px 0;border-top:1px solid var(--line);font-size:14px}
+.chatzeile:first-child{border-top:none}
+.chatzeile b{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft);font-weight:400;margin-right:6px}
 .gzeile{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
 .gzeile:first-child{border-top:none}
 .gname{font-family:'Fraunces',Georgia,serif;font-size:17px}
@@ -224,13 +240,26 @@ ul.log li.edit .btn{width:auto;padding:9px 16px}
     <div class="stack hidden" id="boardView">
       <div class="panel">
         <p class="eyebrow" id="boardTitel">Partie</p>
-        <svg id="board" viewBox="0 0 360 300" role="img" aria-label="Spielbrett"></svg>
+        <div class="brettbox">
+          <svg id="board" viewBox="0 0 360 300" role="img" aria-label="Spielbrett"></svg>
+          <div id="blasen"></div>
+        </div>
         <p class="preview" id="boardStatus"></p>
         <div class="inline">
           <button class="btn" id="rollBtn">Würfeln</button>
           <button class="ghost" id="undoBtn">Zug zurück</button>
         </div>
         <p class="note" id="boardHinweis">Tipp auf einen eigenen Stein, dann auf das Ziel.</p>
+      </div>
+
+      <div class="panel">
+        <p class="eyebrow">Zuruf</p>
+        <div class="schnellreihe" id="schnell"></div>
+        <div id="chatListe" class="chatliste"><p class="empty">Noch nichts gesagt.</p></div>
+        <div class="inline">
+          <input id="chatText" placeholder="Nachricht" autocomplete="off" maxlength="200" />
+          <button class="btn" id="chatSend">Senden</button>
+        </div>
       </div>
       <div class="bar">
         <span class="tag" id="boardStand">—</span>
@@ -1483,7 +1512,12 @@ function wuerfelBild(x, y, gr, augen, blass){
   return g + `</g>`;
 }
 
-function punktGeometrie(i){
+function gedreht(){
+  return !!(aktuellesSpiel && sitz(aktuellesSpiel.id) === 2);
+}
+
+function punktGeometrie(roh){
+  const i = gedreht() ? 23 - roh : roh;     // dunkle Seite sieht das Brett um 180 Grad gedreht
   const rand = 10, barB = 16, bh = 118, H = 300;
   const breite = (360 - 2*rand - barB) / 12;
   let spalte, oben;
@@ -1533,18 +1567,20 @@ function zeichneBrett(){
   }
 
   const barX = 10 + 6*((360-36)/12) + 8;
-  if (stand.bar[1]) g += `<circle cx="${barX}" cy="188" r="9.5" fill="${HELL}" stroke="#7A5231"/><text x="${barX}" y="192" text-anchor="middle" font-size="10" fill="${DUNKEL}">${stand.bar[1]}</text>`;
-  if (stand.bar[2]) g += `<circle cx="${barX}" cy="112" r="9.5" fill="${DUNKEL}" stroke="#7A5231"/><text x="${barX}" y="116" text-anchor="middle" font-size="10" fill="${HELL}">${stand.bar[2]}</text>`;
+  const barY = { 1: gedreht() ? 112 : 188, 2: gedreht() ? 188 : 112 };
+  if (stand.bar[1]) g += `<circle cx="${barX}" cy="${barY[1]}" r="9.5" fill="${HELL}" stroke="#7A5231"/><text x="${barX}" y="${barY[1]+4}" text-anchor="middle" font-size="10" fill="${DUNKEL}">${stand.bar[1]}</text>`;
+  if (stand.bar[2]) g += `<circle cx="${barX}" cy="${barY[2]}" r="9.5" fill="${DUNKEL}" stroke="#7A5231"/><text x="${barX}" y="${barY[2]+4}" text-anchor="middle" font-size="10" fill="${HELL}">${stand.bar[2]}</text>`;
 
   g += `<text x="6" y="152" font-family="ui-monospace,monospace" font-size="10" fill="#2A1D14">raus ${stand.off[1]}/${stand.off[2]}</text>`;
 
   // Würfel in der Mitte
   if (stand.phase === "eroeffnung"){
     const gr = 30, y = 135;
-    g += wuerfelBild(86, y, gr, stand.erst[1], false);
-    g += wuerfelBild(244, y, gr, stand.erst[2], false);
-    g += `<text x="101" y="${y - 6}" text-anchor="middle" font-family="ui-monospace,monospace" font-size="9" fill="#2A1D14">hell</text>`;
-    g += `<text x="259" y="${y - 6}" text-anchor="middle" font-family="ui-monospace,monospace" font-size="9" fill="#2A1D14">dunkel</text>`;
+    const linksSitz = gedreht() ? 2 : 1, rechtsSitz = gedreht() ? 1 : 2;
+    g += wuerfelBild(86, y, gr, stand.erst[linksSitz], false);
+    g += wuerfelBild(244, y, gr, stand.erst[rechtsSitz], false);
+    g += `<text x="101" y="${y - 6}" text-anchor="middle" font-family="ui-monospace,monospace" font-size="9" fill="#2A1D14">${linksSitz === 1 ? "hell" : "dunkel"}</text>`;
+    g += `<text x="259" y="${y - 6}" text-anchor="middle" font-family="ui-monospace,monospace" font-size="9" fill="#2A1D14">${rechtsSitz === 1 ? "hell" : "dunkel"}</text>`;
   } else if (stand.wurf.length){
     const pasch = stand.wurf[0] === stand.wurf[1];
     const anzahl = pasch ? 4 : 2;
@@ -1632,6 +1668,104 @@ async function ergebnisEintragen(){
 
 function brettZeichnen(){ zeichneBrett(); brettStatus(); }
 
+// --- Zuruf ---
+const SCHNELL = ["Pfff", "Glückspilz", "Menno", "Gönnung", "Jipiiieeeh"];
+let chatZeilen = [], gezeigt = new Set(), blasen = [];
+
+function chatName(sitzNr){
+  if (!aktuellesSpiel) return "";
+  return nameOf(sitzNr === 1 ? aktuellesSpiel.p1 : aktuellesSpiel.p2);
+}
+
+function renderSchnell(){
+  const box = $("schnell");
+  if (!box || box.dataset.fertig) return;
+  box.innerHTML = SCHNELL.map((t,i) => `<button data-schnell="${i}"></button>`).join("");
+  box.querySelectorAll("button").forEach((b,i) => b.textContent = SCHNELL[i]);
+  box.dataset.fertig = "1";
+}
+
+function renderChat(){
+  const box = $("chatListe");
+  if (!box) return;
+  if (!chatZeilen.length){
+    box.innerHTML = `<p class="empty">Noch nichts gesagt.</p>`;
+    return;
+  }
+  box.innerHTML = chatZeilen.slice(-40).map(z => {
+    const d = new Date(z.created_at);
+    return `<div class="chatzeile"><b>${chatName(z.sitz)} · ${d.toLocaleTimeString("de-DE",{hour:"2-digit",minute:"2-digit"})}</b><span class="ct"></span></div>`;
+  }).join("");
+  const sichtbar = chatZeilen.slice(-40);
+  box.querySelectorAll(".ct").forEach((el,i) => el.textContent = sichtbar[i].text);
+  box.scrollTop = box.scrollHeight;
+}
+
+function renderBlasen(){
+  const box = $("blasen");
+  if (!box) return;
+  const jetzt = Date.now();
+  blasen = blasen.filter(b => jetzt - b.zeit < 10000);
+  const meinSitz = aktuellesSpiel ? sitz(aktuellesSpiel.id) : 0;
+  box.innerHTML = blasen.map(b =>
+    `<div class="blase ${b.sitz === meinSitz ? "unten" : "oben"}"><small></small><span class="bt"></span></div>`).join("");
+  box.querySelectorAll(".blase").forEach((el,i) => {
+    el.querySelector("small").textContent = chatName(blasen[i].sitz);
+    el.querySelector(".bt").textContent = blasen[i].text;
+  });
+}
+
+function blaseZeigen(zeile){
+  if (gezeigt.has(zeile.id)) return;
+  gezeigt.add(zeile.id);
+  if (!zeile.schnell) return;                                   // nur Zurufe blubbern
+  if (Date.now() - new Date(zeile.created_at).getTime() > 10000) return;
+  const doppelt = blasen.some(b => b.sitz === zeile.sitz && b.text === zeile.text && Date.now() - b.zeit < 3000);
+  if (doppelt) return;                                          // eigener Zuruf kommt gleich nochmal zurück
+  blasen.push({ id: zeile.id, sitz: zeile.sitz, text: zeile.text, zeit: Date.now() });
+  renderBlasen();
+  setTimeout(renderBlasen, 10100);
+}
+
+function chatAufnehmen(zeile, alt){
+  if (!zeile || chatZeilen.some(z => z.id === zeile.id)) return;
+  chatZeilen.push(zeile);
+  chatZeilen.sort((a,b) => new Date(a.created_at) - new Date(b.created_at));
+  renderChat();
+  if (!alt) blaseZeigen(zeile);
+}
+
+async function chatLaden(gid){
+  chatZeilen = []; blasen = []; gezeigt = new Set();
+  renderChat(); renderBlasen(); renderSchnell();
+  try {
+    const r = await withTimeout(db.from("chat").select("*").eq("game", gid));
+    if (!r.error && r.data){
+      chatZeilen = r.data.slice().sort((a,b) => new Date(a.created_at) - new Date(b.created_at));
+      chatZeilen.forEach(z => gezeigt.add(z.id));
+      renderChat();
+    }
+  } catch (e) { /* stumm */ }
+}
+
+async function chatSenden(text, schnell){
+  if (!aktuellesSpiel || !text.trim()) return;
+  const meinSitz = sitz(aktuellesSpiel.id) || meinPlatz(aktuellesSpiel) || 1;
+  const zeile = { game: aktuellesSpiel.id, sitz: meinSitz, text: text.trim().slice(0, 200), schnell: !!schnell };
+  if (schnell){
+    blasen.push({ id: "eigen" + Date.now(), sitz: meinSitz, text: zeile.text, zeit: Date.now() });
+    renderBlasen();
+    setTimeout(renderBlasen, 10100);
+  }
+  try {
+    const r = await withTimeout(db.from("chat").insert(zeile).select());
+    if (!r.error && r.data && r.data[0]){
+      gezeigt.add(r.data[0].id);
+      chatAufnehmen(r.data[0], true);
+    }
+  } catch (e) { /* stumm */ }
+}
+
 // Der eigene angefangene Zug wird geschützt — aber nur, solange er wirklich läuft.
 function eigenerZugLaeuft(fremderZug){
   if (!stand || !aktuellesSpiel) return false;
@@ -1658,6 +1792,9 @@ function kanalOeffnen(gid){
       .on("postgres_changes",
           { event: "UPDATE", schema: "public", table: "games", filter: "id=eq." + gid },
           (nachricht) => standUebernehmen(nachricht.new))
+      .on("postgres_changes",
+          { event: "INSERT", schema: "public", table: "chat", filter: "game=eq." + gid },
+          (nachricht) => chatAufnehmen(nachricht.new, false))
       .subscribe();
   } catch (e) { kanal = null; }   // ohne Realtime bleibt das Nachfragen im Takt
 }
@@ -1762,6 +1899,12 @@ document.addEventListener("click", async (e) => {
     return;
   }
 
+  const schnellNr = e.target.dataset?.schnell;
+  if (schnellNr !== undefined){
+    await chatSenden(SCHNELL[Number(schnellNr)], true);
+    return;
+  }
+
   const weg = e.target.dataset?.delgame;
   if (weg){
     const g = games.find(x => x.id === weg);
@@ -1799,6 +1942,7 @@ document.addEventListener("click", async (e) => {
     zeigeAnsicht("boardView");
     kanalOeffnen(aktuellesSpiel.id);
     brettZeichnen();
+    chatLaden(aktuellesSpiel.id);
     return;
   }
 
@@ -1909,6 +2053,13 @@ $("rollBtn").onclick = async () => {
   brettZeichnen();
   await spielSpeichern(false);
 };
+$("chatSend").onclick = async () => {
+  const t = $("chatText").value;
+  $("chatText").value = "";
+  await chatSenden(t, false);
+};
+$("chatText").onkeydown = (e) => { if (e.key === "Enter") $("chatSend").click(); };
+
 $("undoBtn").onclick = () => {
   if (!verlauf.length) return;
   stand = verlauf.pop();
