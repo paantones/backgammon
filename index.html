@@ -3,13 +3,13 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>Backgammon-Liga</title>
+<title>BätsXherei</title>
 <meta name="theme-color" content="#C1946A" />
 <link rel="manifest" href="/manifest.webmanifest" />
 <link rel="icon" href="/icon-192.png" />
 <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
-<meta name="apple-mobile-web-app-title" content="Backgammon" />
+<meta name="apple-mobile-web-app-title" content="BätsXherei" />
 <meta name="apple-mobile-web-app-status-bar-style" content="default" />
 <meta name="mobile-web-app-capable" content="yes" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -29,13 +29,16 @@ body{
 }
 .wrap{max-width:1080px;margin:0 auto}
 .head{background:var(--bark)}
-.head-in{max-width:1080px;margin:0 auto;padding:26px 18px 22px}
+.head-in{max-width:1080px;margin:0 auto;padding:16px 18px 10px}
+.kopftitel{font-size:clamp(24px,6.4vw,34px);display:flex;flex-wrap:wrap;align-items:baseline;gap:0 10px}
+.kopftitel .bereich{font-weight:400;font-size:.62em;opacity:.85}
+.head .sub{margin-top:4px;font-size:13px}
 .head h1{color:var(--pearl)}
 .head .sub{color:var(--wood)}
 .stack,.bar{padding:0 18px}
 h1{font-family:'Fraunces',Georgia,serif;font-weight:800;font-size:clamp(30px,7vw,52px);line-height:.95;letter-spacing:-.02em;margin:0}
 .sub{color:var(--ink-soft);font-size:14px;margin:8px 0 0;max-width:52ch}
-.strip{display:block;width:100%;height:48px;margin:0 0 26px}
+.strip{display:block;width:100%;height:30px;margin:0 0 20px}
 .stack{max-width:620px;margin:0 auto}
 .headrow{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
 .tabs{position:sticky;top:0;z-index:20;display:flex;background:var(--bark-edge);
@@ -53,6 +56,20 @@ h1{font-family:'Fraunces',Georgia,serif;font-weight:800;font-size:clamp(30px,7vw
 #board{display:block;width:100%;height:auto;margin:4px 0 10px;touch-action:manipulation}
 .brettbox{position:relative}
 .zugleiste .btn{flex:1}
+.nachkopf{font-family:'Fraunces',Georgia,serif;font-size:19px;margin:0 0 4px}
+.nachkopf.gut{color:#2F5D3A}
+.kandidat{border-top:1px solid var(--line)}
+.kandidat:first-of-type{border-top:none}
+.kandidat summary{list-style:none;cursor:pointer;display:grid;grid-template-columns:22px 1fr auto;gap:8px;align-items:baseline;padding:10px 0}
+.kandidat summary::-webkit-details-marker{display:none}
+.kandidat .rang{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--ink-soft)}
+.kandidat .zug{font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:600}
+.kandidat .etikett{display:inline-block;margin-left:6px;font-family:'IBM Plex Sans',sans-serif;font-size:11px;font-weight:600;
+  background:var(--horn);color:var(--pearl);border-radius:10px;padding:1px 8px;vertical-align:1px}
+.kandidat .kurz{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--ink-soft);text-align:right}
+.kandidat.deiner summary{background:rgba(242,234,218,.45);border-radius:6px;padding-left:6px;padding-right:6px}
+.kandidat .detail{display:grid;grid-template-columns:1fr auto;gap:4px 12px;padding:0 0 12px 30px;font-size:13px}
+.kandidat .detail span:nth-child(even){font-family:'IBM Plex Mono',monospace;text-align:right}
 .dialog{position:fixed;inset:0;z-index:50;background:rgba(27,18,11,.62);display:flex;align-items:center;
   justify-content:center;padding:22px;backdrop-filter:blur(2px);animation:dlgEin .18s ease-out}
 .dialog.hidden{display:none}
@@ -188,8 +205,8 @@ ul.log li.edit .btn{width:auto;padding:9px 16px}
 
   <div id="gate" class="gate">
     <span class="chip">Geschlossene Runde</span>
-    <h1>Backgammon-Liga</h1>
-    <p class="sub">Passwort eingeben, dann geht's zur Tabelle.</p>
+    <h1>BätsXherei</h1>
+    <p class="sub">Passwort eingeben, dann geht's los.</p>
     <div style="height:20px"></div>
     <div class="field">
       <label for="pw">Passwort</label>
@@ -207,8 +224,8 @@ ul.log li.edit .btn{width:auto;padding:9px 16px}
     </nav>
     <div class="head">
       <div class="head-in">
-        <h1>Backgammon-Liga</h1>
-        <p class="sub">Jeder Sieg bringt Punkte: einfach 1, Gammon 2, Backgammon 3. Wer verliert, bekommt nichts abgezogen. Elo und Plus-Minus stehen unten als Nebenwertungen.</p>
+        <h1 class="kopftitel"><span class="marke">BätsXherei</span><span class="bereich" id="kopfBereich">– Liga</span></h1>
+        <p class="sub" id="kopfText">Sieg 1 · Gammon 2 · Backgammon 3</p>
       </div>
     </div>
     <svg class="strip" viewBox="0 0 380 48" preserveAspectRatio="none" aria-hidden="true" id="strip"></svg>
@@ -252,6 +269,22 @@ ul.log li.edit .btn{width:auto;padding:9px 16px}
     </div>
 
     <div class="stack hidden" id="gamesView">
+      <div class="panel">
+        <p class="eyebrow">Training gegen den Computer</p>
+        <div class="field">
+          <label for="tProfil">Spieltyp des Computers</label>
+          <select id="tProfil">
+            <option value="ausgewogen">Ausgewogen</option>
+            <option value="rennen">Rennspieler*in — läuft davon</option>
+            <option value="blockade">Blockierer*in — sperrt ein</option>
+            <option value="angriff">Angreifer*in — wirft raus</option>
+            <option value="anker">Ankerspieler*in — wartet hinten</option>
+          </select>
+        </div>
+        <button class="btn" id="startTraining">Training starten</button>
+        <p class="note">Zählt nicht für die Liga. Nach jedem deiner Züge zeigt die Nachbetrachtung, was die Maschine gespielt hätte.</p>
+      </div>
+
       <div class="panel">
         <p class="eyebrow">Neue Partie</p>
         <div class="field">
@@ -302,7 +335,12 @@ ul.log li.edit .btn{width:auto;padding:9px 16px}
         <p class="note" id="boardHinweis">Tipp auf einen eigenen Stein, dann auf das Ziel.</p>
       </div>
 
-      <div class="panel">
+      <div class="panel hidden" id="nachPanel">
+        <p class="eyebrow">Nachbetrachtung</p>
+        <div id="nachInhalt"><p class="empty">Erscheint, sobald du deinen ersten Zug beendet hast.</p></div>
+      </div>
+
+      <div class="panel" id="zurufPanel">
         <p class="eyebrow">Zuruf</p>
         <div class="schnellreihe" id="schnell"></div>
         <div id="chatListe" class="chatliste"><p class="empty">Noch nichts gesagt.</p></div>
@@ -491,7 +529,12 @@ function replay(){
 const partien = (n) => `${n} ${n === 1 ? "Partie" : "Partien"}`;
 const siege = (n) => `${n} ${n === 1 ? "Sieg" : "Siege"}`;
 
-const nameOf = (id) => (players.find(p => p.id === id) || {}).name || "—";
+let trainingProfil = "ausgewogen";
+const nameOf = (id) => {
+  if (id === "cpu") return `Computer (${(PROFILE[trainingProfil] || PROFILE.ausgewogen).name})`;
+  if (id === "du") return ich() ? (players.find(p => p.id === ich()) || {}).name || "Du" : "Du";
+  return (players.find(p => p.id === id) || {}).name || "—";
+};
 
 // --- Laden & Zeichnen ---
 function withTimeout(p, ms = 15000){
@@ -1532,6 +1575,141 @@ function zugBeenden(st){
 }
 // === Regelwerk Ende ===
 
+// === Training ===
+function pips(st, sp){
+  let n = st.bar[sp] * 25;
+  for (let i = 0; i < 24; i++){
+    const v = st.pts[i];
+    if (sp === 1 && v > 0) n += v * (i + 1);
+    if (sp === 2 && v < 0) n += -v * (24 - i);
+  }
+  return n;
+}
+
+function hatKontakt(st){
+  let hinterster1 = st.bar[1] ? 24 : -1, hinterster2 = st.bar[2] ? -1 : 24;
+  for (let i = 0; i < 24; i++){
+    if (st.pts[i] > 0) hinterster1 = Math.max(hinterster1, i);
+    if (st.pts[i] < 0) hinterster2 = Math.min(hinterster2, i);
+  }
+  return hinterster1 > hinterster2;
+}
+
+// Alle vollständigen Zugfolgen für den aktuellen Wurf, gleiche Endstellungen zusammengefasst
+function zugfolgen(st){
+  const ende = new Map(), gesehen = new Set();
+  (function dfs(s, weg){
+    const k = standSchluessel(s) + "|" + s.off[1] + "," + s.off[2];
+    if (gesehen.has(k)) return;
+    gesehen.add(k);
+    const moeglich = s.gewinner ? [] : legaleZuege(s);
+    if (!moeglich.length){
+      const ek = s.pts.join(",") + "|" + s.bar[1] + "," + s.bar[2] + "|" + s.off[1] + "," + s.off[2];
+      if (!ende.has(ek)) ende.set(ek, { zuege: weg, stand: s });
+      return;
+    }
+    for (const z of moeglich) dfs(anwenden(s, z), weg.concat([z]));
+  })(st, []);
+  return [...ende.values()];
+}
+
+// Schneller Treffertest für die Gegenseite (ohne Würfelpflicht-Feinheiten)
+function trifftSchnell(st){
+  const geg = st.turn === 1 ? 2 : 1, start = st.bar[geg];
+  let gefunden = false;
+  const gesehen = new Set();
+  (function dfs(s){
+    if (gefunden) return;
+    if (s.bar[geg] > start){ gefunden = true; return; }
+    if (!s.rest.length) return;
+    const k = standSchluessel(s);
+    if (gesehen.has(k)) return;
+    gesehen.add(k);
+    for (const d of new Set(s.rest)){
+      for (const z of zuegeFuer(s, s.turn, d)){ dfs(anwenden(s, z)); if (gefunden) return; }
+    }
+  })(st);
+  return gefunden;
+}
+
+// Wahrscheinlichkeit, dass die Gegenseite im nächsten Wurf einen Stein von "opfer" trifft
+function trefferRisiko(st, opfer){
+  const s0 = klon(st);
+  s0.turn = opfer === 1 ? 2 : 1; s0.wurf = []; s0.rest = [];
+  if (!hatOffenenStein(s0)) return 0;
+  let p = 0;
+  for (let a = 1; a <= 6; a++) for (let b = a; b <= 6; b++){
+    if (trifftSchnell(wuerfeln(s0, a, b))) p += (a === b ? 1 : 2) / 36;
+  }
+  return Math.min(1, p);
+}
+
+function merkmale(st, sp){
+  const geg = sp === 1 ? 2 : 1;
+  const eigen = (v) => sp === 1 ? v > 0 : v < 0;
+  const heimVon = sp === 1 ? 0 : 18, gegHeimVon = sp === 1 ? 18 : 0;
+  let heimPunkte = 0, anker = 0, blots = 0, hinten = 0, lauf = 0, blockade = 0;
+  for (let i = 0; i < 24; i++){
+    const v = st.pts[i], n = Math.abs(v), meins = eigen(v);
+    if (meins && n >= 2 && i >= heimVon && i < heimVon + 6) heimPunkte++;
+    if (meins && n >= 2 && i >= gegHeimVon && i < gegHeimVon + 6) anker++;
+    if (meins && n === 1) blots++;
+    if (meins && i >= gegHeimVon && i < gegHeimVon + 6) hinten += n;
+    if (meins && n >= 2){ lauf++; blockade = Math.max(blockade, lauf); } else lauf = 0;
+  }
+  const kontakt = hatKontakt(st);
+  // Was ein Treffer kosten würde: der teuerste offene Stein (Augen bis zurück auf die Bar, plus Tempo)
+  let verlust = 0;
+  for (let i = 0; i < 24; i++){
+    if (eigen(st.pts[i]) && Math.abs(st.pts[i]) === 1){
+      const feld = sp === 1 ? i + 1 : 24 - i;
+      verlust = Math.max(verlust, 25 - feld + 4);
+    }
+  }
+  const risiko = kontakt ? trefferRisiko(st, sp) : 0;
+  return {
+    pipVorsprung: pips(st, geg) - pips(st, sp),
+    risiko, risikoKosten: risiko * verlust,
+    heimPunkte, anker, blots, hinten: hinten + st.bar[sp], blockade,
+    gegnerBar: st.bar[geg], raus: st.off[sp], kontakt
+  };
+}
+
+const PROFILE = {
+  ausgewogen: { name: "Ausgewogen",      pip: 1.0, risiko: -1.2, heim: 4, blockade: 5,  anker: 5,  hinten: -2,   gegnerBar: 14, raus: 2 },
+  rennen:     { name: "Rennspieler*in",  pip: 2.0, risiko: -0.4, heim: 1, blockade: 1,  anker: -4, hinten: -5,   gegnerBar: 5,  raus: 3 },
+  blockade:   { name: "Blockierer*in",   pip: 0.6, risiko: -0.9, heim: 5, blockade: 12, anker: 3,  hinten: -1,   gegnerBar: 10, raus: 2 },
+  angriff:    { name: "Angreifer*in",    pip: 0.6, risiko: -0.5, heim: 8, blockade: 4,  anker: 2,  hinten: -1.5, gegnerBar: 24, raus: 2 },
+  anker:      { name: "Ankerspieler*in", pip: 0.6, risiko: -1.6, heim: 3, blockade: 3,  anker: 16, hinten: 1,    gegnerBar: 10, raus: 2 },
+};
+
+function bewerte(m, p){
+  if (!m.kontakt) return m.pipVorsprung + m.raus * 1.5;      // reines Rennen
+  return m.pipVorsprung * p.pip + m.risikoKosten * p.risiko + m.heimPunkte * p.heim
+       + Math.max(0, m.blockade - 1) * p.blockade + m.anker * p.anker + m.hinten * p.hinten
+       + m.gegnerBar * p.gegnerBar + m.raus * p.raus;
+}
+
+// Alle Zugfolgen bewerten, beste zuerst
+function kandidaten(st, profilName){
+  const sp = st.turn, p = PROFILE[profilName] || PROFILE.ausgewogen;
+  return zugfolgen(st)
+    .map(k => { const m = merkmale(k.stand, sp); return { ...k, m, wert: bewerte(m, p) }; })
+    .sort((a, b) => b.wert - a.wert);
+}
+
+function zugText(st, zuege){
+  const sp = st.turn, geg = sp === 1 ? 2 : 1;
+  const feld = (i) => i === "bar" ? "Bar" : i === "off" ? "raus" : String(sp === 1 ? i + 1 : 24 - i);
+  let s = st;
+  return zuege.map(z => {
+    const vorher = s.bar[geg];
+    s = anwenden(s, z);
+    return `${feld(z.von)}/${feld(z.zu)}${s.bar[geg] > vorher ? "*" : ""}`;
+  }).join("  ") || "kein Zug";
+}
+// === Training Ende ===
+
 // --- Spielbetrieb ---
 let games = [], aktuellesSpiel = null, stand = null, gewaehlt = null, verlauf = [], kanal = null;
 
@@ -1544,6 +1722,7 @@ const sitzGespeichert = (gid) => {
 };
 // Erkanntes Gerät: es sitzt, wer erkannt ist — sonst niemand. Unerkannt: was gewählt wurde.
 const sitz = (gid) => {
+  if (gid === "training") return 1;
   const g = (aktuellesSpiel && aktuellesSpiel.id === gid) ? aktuellesSpiel : games.find(x => x.id === gid);
   const mich = ich();
   if (g && mich) return g.p1 === mich ? 1 : g.p2 === mich ? 2 : null;
@@ -1863,6 +2042,11 @@ function brettStatus(){
 
 async function spielSpeichern(fertig){
   if (!aktuellesSpiel) return;
+  if (aktuellesSpiel.training){
+    aktuellesSpiel.state = stand;
+    if (fertig) aktuellesSpiel.status = "fertig";
+    return;
+  }
   const neu = { state: stand, updated_at: new Date().toISOString() };
   if (fertig){ neu.status = "fertig"; aktuellesSpiel.status = "fertig"; }
   try {
@@ -1875,6 +2059,7 @@ async function spielSpeichern(fertig){
 }
 
 async function ergebnisEintragen(){
+  if (aktuellesSpiel && aktuellesSpiel.training) return;     // Training zählt nicht
   const sieger = stand.gewinner === 1 ? aktuellesSpiel.p1 : aktuellesSpiel.p2;
   const verlierer = stand.gewinner === 1 ? aktuellesSpiel.p2 : aktuellesSpiel.p1;
   try {
@@ -2111,10 +2296,13 @@ async function zugMachen(zug){
 }
 
 async function partieAbschliessen(){
+  const training = aktuellesSpiel && aktuellesSpiel.training;
+  if (training && stand.turn === 1 && trainingVorher) nachbetrachtung(trainingVorher, stand);   // letzter eigener Zug
   rauswurfVerbuchen();
   verlauf = [];
   await spielSpeichern(true);
   brettZeichnen();
+  if (training){ await trainingSichern(true); return; }
   await ergebnisEintragen();
 }
 
@@ -2144,10 +2332,15 @@ async function zugAbschliessen(){
   rauswurfVerbuchen();
   if (stand.gewinner){ await partieAbschliessen(); return; }
   if (verlauf.length === 0 && stand.stats && stand.stats[stand.turn]) stand.stats[stand.turn].blockiert += 1;
+  const nachher = stand;
   stand = zugBeenden(stand);
   verlauf = [];
   brettZeichnen();
   await spielSpeichern(false);
+  if (aktuellesSpiel && aktuellesSpiel.training){
+    nachbetrachtung(trainingVorher, nachher);
+    await computerZug();
+  }
 }
 
 let dialogSchliessen = null, ignoriereZurueck = false;
@@ -2204,6 +2397,152 @@ function dialog(titel, text, knoepfe){
   });
 }
 
+// ---------- Training ----------
+let trainingVorher = null, trainingId = null, trainingLog = [];
+
+async function trainingAnlegen(){
+  trainingId = null; trainingLog = [];
+  try {
+    const r = await withTimeout(db.from("trainings")
+      .insert({ profil: trainingProfil, spieler: ich() || null, device: deviceId, state: stand }).select());
+    if (!r.error && r.data && r.data[0]) trainingId = r.data[0].id;
+  } catch (e) { /* ohne Tabelle läuft das Training trotzdem */ }
+}
+
+async function trainingSichern(fertig){
+  if (!trainingId) return;
+  const neu = { zuege: trainingLog, state: stand, updated_at: new Date().toISOString() };
+  if (fertig){ neu.status = "fertig"; neu.gewinner = stand.gewinner; neu.art = stand.art; }
+  try { await withTimeout(db.from("trainings").update(neu).eq("id", trainingId)); } catch (e) {}
+}
+const pause = (ms) => new Promise(r => setTimeout(r, ms));
+
+function trainingStarten(){
+  trainingProfil = $("tProfil").value || "ausgewogen";
+  const g = { id: "training", p1: "du", p2: "cpu", status: "laufend", training: true, state: neuerStand() };
+  trainingVorher = null;
+  $("nachInhalt").innerHTML = `<p class="empty">Erscheint, sobald du deinen ersten Zug beendet hast.</p>`;
+  spielOeffnen(g, { frage: false });
+  trainingAnlegen();
+}
+
+async function trainingEroeffnung(){
+  stand = eroeffnungWuerfeln(stand, 1);
+  brettZeichnen();
+  await pause(700);
+  stand = eroeffnungWuerfeln(stand, 2, 1 + Math.floor(Math.random() * 6));
+  aktuellesSpiel.state = stand;
+  brettZeichnen();
+  if (stand.phase === "eroeffnung") return;              // gleich hoch: nochmal würfeln
+  if (stand.turn === 1){ trainingVorher = klon(stand); return; }
+  await pause(900);
+  await computerZug(true);
+}
+
+async function computerZug(nachEroeffnung){
+  if (!aktuellesSpiel || !aktuellesSpiel.training || stand.gewinner || stand.turn !== 2) return;
+  if (!nachEroeffnung){
+    await pause(650);
+    stand = wuerfeln(stand);
+    brettZeichnen();
+    await pause(800);
+  }
+  const basis = stand;
+  const k = kandidaten(stand, trainingProfil);
+  const folge = k.length ? k[0].zuege : [];
+  trainingLog.push({ wer: "computer", zeit: new Date().toISOString(), wurf: basis.wurf.slice(),
+                     zug: zugText(basis, folge), auswahl: k.length, profil: trainingProfil });
+  for (const z of folge){
+    if (!aktuellesSpiel || !aktuellesSpiel.training) return;   // Training verlassen
+    stand = anwenden(stand, z);
+    brettZeichnen();
+    if (stand.gewinner){ await partieAbschliessen(); return; }
+    await pause(550);
+  }
+  if (!folge.length){ await pause(700); }
+  stand = zugBeenden(stand);
+  aktuellesSpiel.state = stand;
+  brettZeichnen();
+  trainingSichern(false);
+}
+
+function etikettFuer(k, alle){
+  // Unter welchem Spieltyp wäre dieser Zug der beste?
+  const namen = { rennen: "Rennen", blockade: "Blockade", angriff: "Angriff", anker: "Anker", ausgewogen: "Ausgewogen" };
+  let bestes = null;
+  for (const typ of ["angriff", "blockade", "rennen", "anker"]){
+    const p = PROFILE[typ];
+    const spitze = alle.reduce((a, b) => bewerte(b.m, p) > bewerte(a.m, p) ? b : a);
+    if (spitze === k){ bestes = namen[typ]; break; }
+  }
+  if (!bestes){
+    const sicher = alle.reduce((a, b) => b.m.risiko < a.m.risiko ? b : a);
+    if (sicher === k && k.m.risiko === 0) bestes = "am sichersten";
+  }
+  return bestes;
+}
+
+function nachbetrachtung(vorher, nachher){
+  if (!vorher) return;
+  $("nachPanel").classList.remove("hidden");
+  const alle = kandidaten(vorher, "ausgewogen");
+  if (!alle.length) return;
+  const schl = (s) => s.pts.join(",") + "|" + s.bar[1] + "," + s.bar[2] + "|" + s.off[1] + "," + s.off[2];
+  const meinIndex = alle.findIndex(k => schl(k.stand) === schl(nachher));
+  const bester = alle[0];
+  const mein = meinIndex >= 0 ? alle[meinIndex] : null;
+  trainingLog.push({
+    wer: "du", zeit: new Date().toISOString(), wurf: vorher.wurf.slice(),
+    zug: mein ? zugText(vorher, mein.zuege) : null,
+    rang: meinIndex + 1, auswahl: alle.length,
+    abstand: mein ? +(bester.wert - mein.wert).toFixed(2) : null,
+    bester: zugText(vorher, bester.zuege),
+    risiko: mein ? +mein.m.risiko.toFixed(3) : null,
+    risikoBester: +bester.m.risiko.toFixed(3),
+    etikett: mein ? etikettFuer(mein, alle) : null,
+    pips: [pips(vorher, 1), pips(vorher, 2)]
+  });
+  trainingSichern(false);
+  const prozent = (x) => Math.round(x * 100) + " %";
+
+  let kopf;
+  if (alle.length === 1) kopf = `<p class="nachkopf gut">Es gab nur diesen einen Zug.</p>`;
+  else if (meinIndex === 0) kopf = `<p class="nachkopf gut">Bester Zug — genau das hätte die Maschine gespielt.</p>`;
+  else if (meinIndex > 0){
+    const abstand = (bester.wert - alle[meinIndex].wert).toFixed(1).replace(".", ",");
+    kopf = `<p class="nachkopf">Platz ${meinIndex + 1} von ${alle.length}</p><p class="note" style="margin:0 0 8px">${abstand} Bewertungspunkte hinter dem besten Zug.</p>`;
+  } else kopf = `<p class="nachkopf">Dein Zug ließ sich nicht zuordnen.</p>`;
+
+  const zeige = alle.slice(0, 3).map((k, i) => ({ k, rang: i + 1 }));
+  if (meinIndex >= 3) zeige.push({ k: alle[meinIndex], rang: meinIndex + 1 });
+
+  const zeile = ({ k, rang }) => {
+    const deiner = rang - 1 === meinIndex;
+    const et = etikettFuer(k, alle);
+    const m = k.m;
+    return `<details class="kandidat ${deiner ? "deiner" : ""}">
+      <summary>
+        <span class="rang">${rang}.</span>
+        <span><span class="zug">${zugText(vorher, k.zuege)}</span>${et ? `<span class="etikett">${et}</span>` : ""}${deiner ? `<span class="etikett" style="background:#8C3226">dein Zug</span>` : ""}</span>
+        <span class="kurz">Risiko ${prozent(m.risiko)}</span>
+      </summary>
+      <div class="detail">
+        <span>Bewertung</span><span>${k.wert.toFixed(1).replace(".", ",")}</span>
+        <span>Trefferrisiko im nächsten Wurf</span><span>${prozent(m.risiko)}</span>
+        <span>Augenvorsprung</span><span>${m.pipVorsprung > 0 ? "+" : ""}${m.pipVorsprung}</span>
+        <span>Punkte im Heimfeld</span><span>${m.heimPunkte}</span>
+        <span>längste Blockade</span><span>${m.blockade}</span>
+        <span>Anker hinten</span><span>${m.anker}</span>
+        <span>Steine noch hinten</span><span>${m.hinten}</span>
+        <span>Gegner auf der Bar</span><span>${m.gegnerBar}</span>
+        <span>offene Steine</span><span>${m.blots}</span>
+      </div>
+    </details>`;
+  };
+  $("nachInhalt").innerHTML = kopf + zeige.map(zeile).join("")
+    + `<p class="note" style="margin-top:10px">Die Bewertung schaut einen Zug weit und wiegt Augen, Risiko, gebaute Punkte und Blockaden gegeneinander ab. Kein Profiprogramm — aber das Trefferrisiko ist exakt gerechnet.</p>`;
+}
+
 async function spielOeffnen(g, { frage = true, ausVerlauf = false } = {}){
   if (frage && !ich() && sitzGespeichert(g.id) === null && g.status === "laufend"){
     const wahl = await sitzFragen(g);
@@ -2213,6 +2552,9 @@ async function spielOeffnen(g, { frage = true, ausVerlauf = false } = {}){
   aktuellesSpiel = g;
   stand = g.state; verlauf = []; gewaehlt = null;
   zeigeAnsicht("boardView", ausVerlauf, g.id);
+  $("nachPanel").classList.toggle("hidden", !g.training);
+  $("zurufPanel").classList.toggle("hidden", !!g.training);
+  if (g.training){ brettZeichnen(); return; }
   if (g.status === "laufend") kanalOeffnen(g.id);
   brettZeichnen();
   chatLaden(g.id);
@@ -2395,8 +2737,20 @@ function zeigeAnsicht(name, ausVerlauf, spielId){
     if (el) el.classList.toggle("hidden", v !== name);
   });
   const reiter = name === "boardView" ? "gamesView" : name;
+  const KOPF = {
+    mainView:  ["– Liga",      "Sieg 1 · Gammon 2 · Backgammon 3"],
+    statsView: ["– Statistik", "Wer wann vorn lag und warum"],
+    gamesView: ["– Spielen",   "Gegeneinander oder gegen den Computer"],
+    boardView: ["– Spielen",   aktuellesSpiel && aktuellesSpiel.training ? "Training" : "Partie"],
+  };
+  const [bereich, zeile] = KOPF[name] || KOPF.mainView;
+  $("kopfBereich").textContent = bereich;
+  $("kopfText").textContent = zeile;
   document.querySelectorAll(".tab").forEach(b => b.classList.toggle("aktiv", b.dataset.view === reiter));
-  if (name !== "boardView") kanalSchliessen();
+  if (name !== "boardView"){
+    kanalSchliessen();
+    if (aktuellesSpiel && aktuellesSpiel.training) aktuellesSpiel = null;
+  }
   if (name === "statsView") renderStats();
   if (name === "gamesView") renderGames();
   window.scrollTo(0, 0);
@@ -2456,6 +2810,7 @@ $("rollBtn").onclick = async () => {
   if (stand.phase === "eroeffnung"){
     if (stand.erst[meinSitz] != null) return;
     $("rollBtn").disabled = true;
+    if (aktuellesSpiel.training){ await trainingEroeffnung(); return; }
     await eroeffnungSenden(meinSitz);
     return;
   }
@@ -2475,6 +2830,7 @@ $("rollBtn").onclick = async () => {
     };
   } catch (e) { stand.zugInfo = null; }
   verlauf = [];
+  if (aktuellesSpiel.training) trainingVorher = klon(stand);
   brettZeichnen();
   await spielSpeichern(false);
 };
@@ -2493,6 +2849,7 @@ $("undoBtn").onclick = async () => {
   await spielSpeichern(false);
 };
 $("endBtn").onclick = zugAbschliessen;
+$("startTraining").onclick = trainingStarten;
 $("offBtn").onclick = async () => {
   if (!stand || gewaehlt === null) return;
   const zug = legaleZuege(stand).find(z => z.von === gewaehlt && z.zu === "off");

@@ -1,7 +1,7 @@
 {
-  "name": "Backgammon-Liga",
-  "short_name": "Backgammon",
-  "description": "Elo-Tabelle für unsere Backgammon-Runde",
+  "name": "BätsXherei",
+  "short_name": "BätsXherei",
+  "description": "Backgammon-Liga, Statistik und Spiel",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
@@ -10,8 +10,21 @@
   "theme_color": "#C1946A",
   "lang": "de",
   "icons": [
-    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" },
-    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
   ]
 }
