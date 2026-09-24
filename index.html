@@ -53,6 +53,32 @@ h1{font-family:'Fraunces',Georgia,serif;font-weight:800;font-size:clamp(30px,7vw
 #board{display:block;width:100%;height:auto;margin:4px 0 10px;touch-action:manipulation}
 .brettbox{position:relative}
 .zugleiste .btn{flex:1}
+.dialog{position:fixed;inset:0;z-index:50;background:rgba(27,18,11,.62);display:flex;align-items:center;
+  justify-content:center;padding:22px;backdrop-filter:blur(2px);animation:dlgEin .18s ease-out}
+.dialog.hidden{display:none}
+@keyframes dlgEin{from{opacity:0}to{opacity:1}}
+@keyframes dlgBox{from{transform:translateY(12px) scale(.97);opacity:0}to{transform:none;opacity:1}}
+.dialogbox{background:var(--wood-panel);border-radius:12px;max-width:380px;width:100%;overflow:hidden;
+  box-shadow:0 18px 50px rgba(0,0,0,.45);animation:dlgBox .22s ease-out}
+.dialogkopf{background:var(--bark);padding:20px 22px 8px}
+.dialogtitel{margin:0;font-family:'Fraunces',Georgia,serif;font-size:24px;font-weight:800;color:var(--pearl);line-height:1.15}
+.dialogzacken{display:block;width:100%;height:22px;margin-top:-1px}
+.dialoginhalt{padding:10px 22px 22px}
+.dialogtext{margin:0 0 16px;font-size:15px;line-height:1.5;color:var(--ink-soft)}
+.dialogknoepfe{display:flex;flex-direction:column;gap:10px}
+.wahl{display:flex;align-items:center;gap:12px;width:100%;text-align:left;background:var(--field);
+  border:1px solid rgba(122,82,49,.35);border-radius:8px;padding:13px 14px;cursor:pointer;
+  font-family:'Fraunces',Georgia,serif;font-size:18px;color:var(--ink);transition:background .12s,transform .08s}
+.wahl:hover{background:var(--pearl)}
+.wahl:active{transform:scale(.98)}
+.wahl .stein{flex:none;width:26px;height:26px;border-radius:50%;border:1px solid #7A5231;box-shadow:inset 0 -2px 0 rgba(0,0,0,.18)}
+.wahl .stein.hell{background:var(--ivory)}
+.wahl .stein.dunkel{background:var(--horn)}
+.wahl.gefahr{background:#8C3226;color:var(--pearl);border-color:#6E2519;justify-content:center;font-family:'IBM Plex Sans',sans-serif;font-size:16px;font-weight:600}
+.wahl.gefahr:hover{background:#A33B2D}
+.leise{background:none;border:none;color:var(--ink-soft);font-family:'IBM Plex Mono',monospace;font-size:12px;
+  letter-spacing:.1em;text-transform:uppercase;padding:10px;cursor:pointer}
+.leise:hover{color:var(--ink)}
 .rausknopf{margin:0 0 10px;padding:16px;font-size:17px;background:#8C3226}
 .rausknopf:hover{background:#A33B2D}
 .ergebnis{border:2px solid var(--horn)}
@@ -280,7 +306,7 @@ ul.log li.edit .btn{width:auto;padding:9px 16px}
         <p class="eyebrow">Zuruf</p>
         <div class="schnellreihe" id="schnell"></div>
         <div id="chatListe" class="chatliste"><p class="empty">Noch nichts gesagt.</p></div>
-        <div class="inline">
+        <div class="inline" id="chatEingabe">
           <input id="chatText" placeholder="Nachricht" autocomplete="off" maxlength="200" />
           <button class="btn" id="chatSend">Senden</button>
         </div>
@@ -426,6 +452,7 @@ let editingId = null;
 function unlock(){
   $("gate").classList.add("hidden");
   $("app").classList.remove("hidden");
+  try { history.replaceState({ ansicht: "mainView" }, ""); } catch (e) {}
   try { localStorage.setItem("bgl-pw", PASSWORT); } catch(e){}
   $("stand").textContent = "verbinde …";
   setTimeout(() => load(), 400);
@@ -774,9 +801,9 @@ function fakten(){
   });
 
   const g = besteZeile(gammon);
-  if (g) F.push(["Gammon-Spezialist*in", `${nameOf(g[0])} — ${g[1]}×`, "kein Stein der Gegenseite draußen, aber alle daheim"]);
+  if (g) F.push(["Gammon-Spezialist*in", `${nameOf(g[0])} — ${g[1]}×`, "kein Stein der Gegenseite draußen, aber alle auf der eigenen Hälfte"]);
   const b = besteZeile(backg);
-  if (b) F.push(["Backgammon-König*in", `${nameOf(b[0])} — ${b[1]}×`, "kein Stein draußen und nicht alle daheim"]);
+  if (b) F.push(["Backgammon-König*in", `${nameOf(b[0])} — ${b[1]}×`, "kein Stein draußen und noch einer auf der gegnerischen Hälfte"]);
 
   const pa = besteZeile(paare);
   if (pa && pa[1] > 1){
@@ -1381,11 +1408,12 @@ function anwenden(st, zug){
     const verl = geg;
     if (n.off[verl] > 0) n.art = 1;
     else {
-      // Hausregel: Backgammon, sobald die Verliererseite noch nicht alle Steine daheim hat
-      const draussen = sp === 1
-        ? n.pts.slice(0, 18).some(v => v < 0)
-        : n.pts.slice(6, 24).some(v => v > 0);
-      n.art = (n.bar[verl] > 0 || draussen) ? 3 : 2;
+      // Hausregel: Backgammon, solange die Verliererseite noch einen Stein auf der gegnerischen Hälfte
+      // (oder auf der Bar) hat. Gammon, wenn alle auf der eigenen Hälfte stehen.
+      const aufGegnerHaelfte = sp === 1
+        ? n.pts.slice(0, 12).some(v => v < 0)     // dunkel verliert: hellen Hälfte ist 0..11
+        : n.pts.slice(12, 24).some(v => v > 0);   // hell verliert: dunkle Hälfte ist 12..23
+      n.art = (n.bar[verl] > 0 || aufGegnerHaelfte) ? 3 : 2;
     }
     n.rest = [];
   }
@@ -1507,7 +1535,21 @@ function zugBeenden(st){
 // --- Spielbetrieb ---
 let games = [], aktuellesSpiel = null, stand = null, gewaehlt = null, verlauf = [], kanal = null;
 
-const sitz = (gid) => { try { return Number(localStorage.getItem("bgl-sitz-" + gid)) || null; } catch(e){ return null; } };
+const sitzGespeichert = (gid) => {
+  try {
+    const v = localStorage.getItem("bgl-sitz-" + gid);
+    if (v === "b") return "b";
+    return Number(v) || null;
+  } catch (e) { return null; }
+};
+// Erkanntes Gerät: es sitzt, wer erkannt ist — sonst niemand. Unerkannt: was gewählt wurde.
+const sitz = (gid) => {
+  const g = (aktuellesSpiel && aktuellesSpiel.id === gid) ? aktuellesSpiel : games.find(x => x.id === gid);
+  const mich = ich();
+  if (g && mich) return g.p1 === mich ? 1 : g.p2 === mich ? 2 : null;
+  const v = sitzGespeichert(gid);
+  return v === "b" ? null : v;
+};
 const sitzSetzen = (gid, n) => { try { localStorage.setItem("bgl-sitz-" + gid, String(n)); } catch(e){} };
 
 async function spieleLaden(){
@@ -1747,6 +1789,21 @@ function brettStatus(){
   const zeig = (id, an) => $(id).classList.toggle("hidden", !an);
   $("boardTitel").textContent = `${namen[1]} (hell) gegen ${namen[2]} (dunkel)`;
 
+  const zuschauer = !meinSitz;
+  $("chatEingabe").classList.toggle("hidden", zuschauer);
+  $("schnell").classList.toggle("hidden", zuschauer);
+
+  if (zuschauer && !stand.gewinner){
+    zeig("rollBtn", false); zeig("endBtn", false); zeig("undoBtn", false);
+    if (stand.phase === "eroeffnung"){
+      $("boardStatus").textContent = "Eröffnungswurf läuft";
+    } else {
+      $("boardStatus").textContent = `${namen[stand.turn]} ist dran`;
+    }
+    $("boardHinweis").textContent = "Du schaust zu. Züge erscheinen live.";
+    return;
+  }
+
   // Partie entschieden
   if (stand.gewinner){
     const art = stand.art === 3 ? "Backgammon" : stand.art === 2 ? "Gammon" : "einfacher Sieg";
@@ -1757,6 +1814,7 @@ function brettStatus(){
       : unbestaetigt && stand.gewinner !== meinSitz
         ? `${namen[stand.gewinner]} hat den letzten Stein draußen — noch nicht bestätigt`
         : `${namen[stand.gewinner]} gewinnt — ${art}`;
+    $("boardHinweis").textContent = "";
     zeig("rollBtn", false);
     zeig("endBtn", nochOffen); $("endBtn").disabled = !nochOffen;
     zeig("undoBtn", nochOffen); $("undoBtn").disabled = !nochOffen;
@@ -2092,6 +2150,84 @@ async function zugAbschliessen(){
   await spielSpeichern(false);
 }
 
+let dialogSchliessen = null, ignoriereZurueck = false;
+
+// Einheitlicher Dialog. knoepfe: [{ text, wert, art: "hell" | "dunkel" | "gefahr" | "leise" }]
+function dialog(titel, text, knoepfe){
+  return new Promise(fertig => {
+    const d = $("dialog");
+    $("dlgTitel").textContent = titel;
+    $("dlgText").textContent = text;
+    const z = $("dlgZacken");
+    if (!z.dataset.fertig){
+      const N = 12, W = 360 / N;
+      let g = "";
+      for (let i = 0; i < N; i++){
+        const x = i * W, t = x + W/2;
+        g += `<polygon points="${x},0 ${x+W},0 ${t},20" fill="#4A3220"/>`;
+        g += `<path d="M${x+1.5},2 L${t},18 L${x+W-1.5},2" fill="none" stroke="#F2EADA" stroke-width="2" stroke-dasharray="2 4"/>`;
+      }
+      z.innerHTML = g; z.dataset.fertig = "1";
+    }
+    const box = $("dlgKnoepfe");
+    box.innerHTML = "";
+    let erledigt = false;
+    const melden = (wert) => { if (!erledigt){ erledigt = true; fertig(wert); } };
+    const zu = (wert, durchZurueck) => {
+      d.classList.add("hidden");
+      dialogSchliessen = null;
+      if (durchZurueck){ melden(wert); return; }
+      // eigenen Verlaufseintrag entfernen und erst danach weitermachen
+      ignoriereZurueck = true;
+      const nach = () => { window.removeEventListener("popstate", nach); melden(wert); };
+      window.addEventListener("popstate", nach);
+      history.back();
+      setTimeout(() => { window.removeEventListener("popstate", nach); ignoriereZurueck = false; melden(wert); }, 600);
+    };
+    knoepfe.forEach(k => {
+      const b = document.createElement("button");
+      b.className = k.art === "leise" ? "leise" : "wahl" + (k.art === "gefahr" ? " gefahr" : "");
+      if (k.art === "hell" || k.art === "dunkel"){
+        const stein = document.createElement("span");
+        stein.className = "stein " + k.art;
+        b.appendChild(stein);
+      }
+      b.appendChild(document.createTextNode(k.text));
+      b.dataset.wert = String(k.wert);
+      b.onclick = () => zu(k.wert);
+      box.appendChild(b);
+    });
+    d.onclick = (e) => { if (e.target === d) zu(null); };   // Tipp daneben schließt
+    dialogSchliessen = () => zu(null, true);
+    d.classList.remove("hidden");
+    history.pushState({ dialog: true }, "");
+  });
+}
+
+async function spielOeffnen(g, { frage = true, ausVerlauf = false } = {}){
+  if (frage && !ich() && sitzGespeichert(g.id) === null && g.status === "laufend"){
+    const wahl = await sitzFragen(g);
+    if (wahl === null) return;             // Dialog weggeklickt: nichts öffnen
+    sitzSetzen(g.id, wahl);
+  }
+  aktuellesSpiel = g;
+  stand = g.state; verlauf = []; gewaehlt = null;
+  zeigeAnsicht("boardView", ausVerlauf, g.id);
+  if (g.status === "laufend") kanalOeffnen(g.id);
+  brettZeichnen();
+  chatLaden(g.id);
+}
+
+function sitzFragen(g){
+  return dialog("Wer spielt hier?",
+    "Dieses Gerät ist noch niemandem zugeordnet. Wähle deine Seite — oder schau einfach zu.",
+    [
+      { text: `Ich bin ${nameOf(g.p1)}`, wert: 1, art: "hell" },
+      { text: `Ich bin ${nameOf(g.p2)}`, wert: 2, art: "dunkel" },
+      { text: "Nur beobachten", wert: "b", art: "leise" },
+    ]);
+}
+
 async function frischerStand(){
   try {
     const r = await withTimeout(db.from("games").select("*").eq("id", aktuellesSpiel.id));
@@ -2168,12 +2304,8 @@ document.addEventListener("click", async (e) => {
 
   const ansehen = e.target.dataset?.ansehen;
   if (ansehen){
-    aktuellesSpiel = games.find(g => g.id === ansehen);
-    if (!aktuellesSpiel) return;
-    stand = aktuellesSpiel.state; verlauf = []; gewaehlt = null;
-    zeigeAnsicht("boardView");
-    brettZeichnen();
-    chatLaden(aktuellesSpiel.id);
+    const g = games.find(x => x.id === ansehen);
+    if (g) await spielOeffnen(g, { frage: false });
     return;
   }
 
@@ -2181,7 +2313,13 @@ document.addEventListener("click", async (e) => {
   if (weg){
     const g = games.find(x => x.id === weg);
     if (!g) return;
-    if (!window.confirm(`Partie ${nameOf(g.p1)} gegen ${nameOf(g.p2)} abbrechen? Sie verschwindet aus der Liste und wird nicht gewertet.`)) return;
+    const ok = await dialog("Partie abbrechen?",
+      `${nameOf(g.p1)} gegen ${nameOf(g.p2)} verschwindet aus der Liste und wird nicht gewertet.`,
+      [
+        { text: "Ja, abbrechen", wert: true, art: "gefahr" },
+        { text: "Doch nicht", wert: false, art: "leise" },
+      ]);
+    if (!ok) return;
     try {
       const r = await withTimeout(db.from("games")
         .update({ status: "abgebrochen", updated_at: new Date().toISOString() }).eq("id", weg));
@@ -2199,22 +2337,8 @@ document.addEventListener("click", async (e) => {
 
   const oeffne = e.target.dataset?.open;
   if (oeffne){
-    aktuellesSpiel = games.find(g => g.id === oeffne);
-    if (!aktuellesSpiel) return;
-    stand = aktuellesSpiel.state; verlauf = []; gewaehlt = null;
-    if (!sitz(aktuellesSpiel.id)){
-      const mich = ich();
-      if (mich === aktuellesSpiel.p1) sitzSetzen(aktuellesSpiel.id, 1);
-      else if (mich === aktuellesSpiel.p2) sitzSetzen(aktuellesSpiel.id, 2);
-      else {
-        const wer = window.prompt(`Wer bist du?  1 = ${nameOf(aktuellesSpiel.p1)} (hell), 2 = ${nameOf(aktuellesSpiel.p2)} (dunkel)`, "1");
-        sitzSetzen(aktuellesSpiel.id, wer === "2" ? 2 : 1);
-      }
-    }
-    zeigeAnsicht("boardView");
-    kanalOeffnen(aktuellesSpiel.id);
-    brettZeichnen();
-    chatLaden(aktuellesSpiel.id);
+    const g = games.find(x => x.id === oeffne);
+    if (g) await spielOeffnen(g, { frage: true });
     return;
   }
 
@@ -2260,7 +2384,12 @@ document.addEventListener("click", async (e) => {
   }
 });
 
-function zeigeAnsicht(name){
+function zeigeAnsicht(name, ausVerlauf, spielId){
+  if (!ausVerlauf){
+    const jetzt = history.state || {};
+    const gleich = jetzt.ansicht === name && (name !== "boardView" || jetzt.spiel === spielId);
+    if (!gleich) history.pushState({ ansicht: name, spiel: spielId || null }, "");
+  }
   ["mainView","statsView","gamesView","boardView"].forEach(v => {
     const el = $(v);
     if (el) el.classList.toggle("hidden", v !== name);
@@ -2282,9 +2411,26 @@ document.querySelectorAll(".tab").forEach(b => {
 });
 
 $("backFromBoard").onclick = async () => {
+  if ((history.state || {}).ansicht === "boardView" && history.length > 1){ history.back(); return; }
   await spieleLaden();
   zeigeAnsicht("gamesView");
 };
+
+window.addEventListener("popstate", async (e) => {
+  if (ignoriereZurueck){ ignoriereZurueck = false; return; }
+  if (dialogSchliessen){ dialogSchliessen(); return; }       // offener Dialog: nur schließen
+  const st = e.state || {};
+  if (st.dialog){ history.back(); return; }                    // alte Dialogzeile überspringen
+  const ziel = st.ansicht || "mainView";
+  if (ziel === "boardView" && st.spiel){
+    const g = games.find(x => x.id === st.spiel);
+    if (g){ await spielOeffnen(g, { frage: false, ausVerlauf: true }); return; }
+    zeigeAnsicht("gamesView", true);
+    return;
+  }
+  if (ziel === "gamesView") await spieleLaden();
+  zeigeAnsicht(ziel, true);
+});
 
 $("startGame").onclick = async () => {
   const a = $("gMe").value, b = $("gYou").value;
@@ -2360,5 +2506,15 @@ $("devLine").onclick = () => {
 
 $("reload").onclick = () => { busy = false; load(); };
 </script>
+<div class="dialog hidden" id="dialog" role="dialog" aria-modal="true" aria-labelledby="dlgTitel">
+  <div class="dialogbox">
+    <div class="dialogkopf"><p class="dialogtitel" id="dlgTitel"></p></div>
+    <svg class="dialogzacken" id="dlgZacken" viewBox="0 0 360 22" preserveAspectRatio="none" aria-hidden="true"></svg>
+    <div class="dialoginhalt">
+      <p class="dialogtext" id="dlgText"></p>
+      <div class="dialogknoepfe" id="dlgKnoepfe"></div>
+    </div>
+  </div>
+</div>
 </body>
 </html>
