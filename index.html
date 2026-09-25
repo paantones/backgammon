@@ -341,6 +341,7 @@ ul.log li.edit .btn{width:auto;padding:9px 16px}
           <button class="btn" id="endBtn">Zug beenden</button>
           <button class="ghost" id="undoBtn">zurück</button>
         </div>
+        <button class="ghost hidden" id="letzterBtn" style="width:100%;margin-top:10px;padding:10px">Letzten Zug anzeigen</button>
         <p class="note" id="boardHinweis">Tipp auf einen eigenen Stein, dann auf das Ziel.</p>
       </div>
 
@@ -1721,7 +1722,7 @@ function zugText(st, zuege){
 // === Training Ende ===
 
 // --- Spielbetrieb ---
-let games = [], aktuellesSpiel = null, stand = null, gewaehlt = null, verlauf = [], kanal = null;
+let games = [], aktuellesSpiel = null, stand = null, gewaehlt = null, verlauf = [], zugListe = [], kanal = null;
 
 const sitzGespeichert = (gid) => {
   try {
@@ -1906,6 +1907,19 @@ function steinPunkt(st, feld, sp){
 function vorschauEbene(){
   if (!vorschauAktiv || !vorschau) return "";
   let g = "";
+  if (vorschau.art === "letzter"){
+    let st = vorschau.stand;
+    vorschau.zuege[0].forEach((z, n) => {
+      const von = steinPunkt(st, z.von, st.turn);
+      const neu = anwenden(st, z);
+      const nach = steinPunkt(neu, z.zu, st.turn);
+      g += `<line x1="${von.x.toFixed(1)}" y1="${von.y.toFixed(1)}" x2="${nach.x.toFixed(1)}" y2="${nach.y.toFixed(1)}" stroke="#8C3226" stroke-width="5" stroke-linecap="round" opacity="0.55"/>`;
+      g += `<circle cx="${nach.x.toFixed(1)}" cy="${nach.y.toFixed(1)}" r="9.5" fill="#C7332A" opacity="0.55" stroke="#8C3226" stroke-width="1.5"/>`;
+      g += `<text x="${nach.x.toFixed(1)}" y="${(nach.y + 3.5).toFixed(1)}" text-anchor="middle" font-family="ui-monospace,monospace" font-size="10" font-weight="700" fill="#F5EFE2">${n + 1}</text>`;
+      st = neu;
+    });
+    return g;
+  }
   [2, 1, 0].forEach(i => {
     const folge = vorschau.zuege[i];
     if (!folge || (vorschau.fokus !== null && vorschau.fokus !== i)) return;
@@ -2124,11 +2138,21 @@ async function ergebnisEintragen(){
 
 function brettZeichnen(){
   zeichneBrett(); brettStatus(); rausKnopf(); ergebnisZeigen();
-  if (vorschauAktiv){
+  if (vorschauAktiv && vorschau && vorschau.art === "letzter"){
+    $("boardStatus").textContent = vorschau.titel;
+    $("boardHinweis").textContent = vorschau.hinweis;
+  } else if (vorschauAktiv){
     $("boardStatus").textContent = "Rückblick: Stellung vor deinem letzten Zug";
     $("boardHinweis").textContent = weiterFreigabe
       ? "Tipp auf „Weiter“, dann zieht der Computer."
       : "Tipp aufs Brett, um zur aktuellen Stellung zurückzukehren.";
+  }
+  const lb = $("letzterBtn");
+  if (lb){
+    const lz = stand && stand.letzterZug;
+    const zeigen = !!(lz && aktuellesSpiel && !aktuellesSpiel.training);
+    lb.classList.toggle("hidden", !zeigen);
+    lb.textContent = vorschauAktiv && vorschau && vorschau.art === "letzter" ? "Zurück zur aktuellen Stellung" : "Letzten Zug anzeigen";
   }
   const vb = $("vorschauBtn");
   if (vb) vb.textContent = vorschauAktiv ? "Zurück zur aktuellen Stellung" : "Auf dem Brett zeigen";
@@ -2325,7 +2349,8 @@ function standUebernehmen(frisch){
   if (eigenerZugLaeuft(frisch.state && frisch.state.turn)) return;
   aktuellesSpiel = frisch;
   stand = frisch.state;
-  verlauf = []; gewaehlt = null;
+  verlauf = []; zugListe = []; gewaehlt = null;
+  if (vorschau && vorschau.art === "letzter"){ vorschauAktiv = false; vorschau = null; }
   brettZeichnen();
   $("boardStand").textContent = "gerade eben";
 }
@@ -2351,7 +2376,7 @@ function kanalSchliessen(){
 
 // Jeder Zwischenschritt wird live übertragen — dran ist die Gegenseite aber erst nach "Zug beenden"
 async function zugMachen(zug){
-  verlauf.push(klon(stand));
+  verlauf.push(klon(stand)); zugListe.push(zug);
   stand = anwenden(stand, zug);
   gewaehlt = null;
   if (stand.gewinner){ await partieAbschliessen(); return; }   // letzter Stein draußen: sofort Schluss
@@ -2361,12 +2386,16 @@ async function zugMachen(zug){
 
 async function partieAbschliessen(){
   const training = aktuellesSpiel && aktuellesSpiel.training;
+  if (!training && stand.gewinner === sitz(aktuellesSpiel.id)){
+    letztenZugMerken();
+    zugArchivieren(stand.letzterZug, stand);
+  }
   if (training && stand.turn === 1 && trainingVorher){
     nachbetrachtung(trainingVorher, stand);                                    // letzter eigener Zug
     $("nachPanel").classList.remove("hidden");
   }
   rauswurfVerbuchen();
-  verlauf = [];
+  verlauf = []; zugListe = [];
   await spielSpeichern(true);
   brettZeichnen();
   if (training){ await trainingSichern(true); return; }
@@ -2392,6 +2421,69 @@ function rauswurfVerbuchen(){
   stand.zugInfo = null;
 }
 
+// Einen Zug mit der Maschine einordnen: Rang insgesamt und unter jedem Spieltyp
+function zugBewerten(vorher, nachher){
+  const alle = kandidaten(vorher, "ausgewogen");
+  if (!alle.length) return { auswahl: 0 };
+  const schl = (x) => x.pts.join(",") + "|" + x.bar[1] + "," + x.bar[2] + "|" + x.off[1] + "," + x.off[2];
+  const i = alle.findIndex(k => schl(k.stand) === schl(nachher));
+  const mein = i >= 0 ? alle[i] : null;
+  const profilRang = {};
+  for (const typ of Object.keys(PROFILE)){
+    const reihe = alle.map((k, idx) => ({ idx, w: bewerte(k.m, PROFILE[typ]) })).sort((a, b) => b.w - a.w);
+    profilRang[typ] = i >= 0 ? reihe.findIndex(x => x.idx === i) + 1 : null;
+  }
+  const rund = (x) => Math.round(x * 1000) / 1000;
+  return {
+    auswahl: alle.length,
+    rang: i + 1,
+    abstand: mein ? rund(alle[0].wert - mein.wert) : null,
+    bester: zugText(vorher, alle[0].zuege),
+    etikett: mein ? etikettFuer(mein, alle) : null,
+    profilRang,
+    merkmale: mein ? { ...mein.m, risiko: rund(mein.m.risiko), risikoKosten: rund(mein.m.risikoKosten) } : null,
+    pips: [pips(vorher, 1), pips(vorher, 2)]
+  };
+}
+
+// Jeden beendeten Online-Zug als eigene Zeile ablegen (läuft im Hintergrund)
+function zugArchivieren(lz, nachher){
+  if (!lz || !aktuellesSpiel || aktuellesSpiel.training) return;
+  const spiel = aktuellesSpiel;
+  setTimeout(async () => {
+    let bewertung = null;
+    try {
+      const vorher = klon({ ...lz.vorher, gewinner: null, art: 1, erst: { 1: null, 2: null } });
+      bewertung = zugBewerten(vorher, nachher);
+    } catch (e) { bewertung = { fehler: String(e && e.message || e) }; }
+    try {
+      await withTimeout(db.from("spielzuege").insert({
+        game: spiel.id, nr: lz.nr, sitz: lz.sitz,
+        spieler: lz.sitz === 1 ? spiel.p1 : spiel.p2,
+        device: deviceId, wurf: lz.wurf, zuege: lz.zuege,
+        vorher: { pts: lz.vorher.pts, bar: lz.vorher.bar, off: lz.vorher.off },
+        bewertung
+      }));
+    } catch (e) { /* Archiv ist Beiwerk — das Spiel läuft weiter */ }
+  }, 60);
+}
+
+// Letzten Zug im Spielstand festhalten — für alle, die zeitversetzt spielen
+function letztenZugMerken(){
+  if (!stand || !aktuellesSpiel || aktuellesSpiel.training) return;
+  const basis = verlauf.length ? verlauf[0] : stand;
+  stand.zugNr = (stand.zugNr || 0) + 1;
+  stand.letzterZug = {
+    nr: stand.zugNr,
+    sitz: basis.turn,
+    wurf: (basis.wurf || []).slice(),
+    zuege: zugListe.map(z => ({ von: z.von, zu: z.zu, die: z.die })),
+    zeit: new Date().toISOString(),
+    vorher: { pts: basis.pts.slice(), bar: { ...basis.bar }, off: { ...basis.off },
+              turn: basis.turn, wurf: (basis.wurf || []).slice(), rest: (basis.rest || []).slice(), phase: "spiel" }
+  };
+}
+
 async function zugAbschliessen(){
   if (!stand || !aktuellesSpiel) return;
   if (stand.turn !== sitz(aktuellesSpiel.id) || !zugFertig()) return;
@@ -2399,9 +2491,11 @@ async function zugAbschliessen(){
   rauswurfVerbuchen();
   if (stand.gewinner){ await partieAbschliessen(); return; }
   if (verlauf.length === 0 && stand.stats && stand.stats[stand.turn]) stand.stats[stand.turn].blockiert += 1;
+  letztenZugMerken();
   const nachher = stand;
+  zugArchivieren(stand.letzterZug, nachher);
   stand = zugBeenden(stand);
-  verlauf = [];
+  verlauf = []; zugListe = [];
   brettZeichnen();
   await spielSpeichern(false);
   if (aktuellesSpiel && aktuellesSpiel.training){
@@ -2649,7 +2743,7 @@ async function spielOeffnen(g, { frage = true, ausVerlauf = false } = {}){
     sitzSetzen(g.id, wahl);
   }
   aktuellesSpiel = g;
-  stand = g.state; verlauf = []; gewaehlt = null;
+  stand = g.state; verlauf = []; zugListe = []; gewaehlt = null;
   zeigeAnsicht("boardView", ausVerlauf, g.id);
   $("nachPanel").classList.add("hidden");
   $("weiterBtn").classList.add("hidden");
@@ -2713,7 +2807,7 @@ async function abgleichen(){
       if (anders && !eigenerZugLaeuft(frisch.state && frisch.state.turn)){
         aktuellesSpiel = frisch;
         stand = frisch.state;
-        verlauf = [];
+        verlauf = []; zugListe = [];
         gewaehlt = null;
         brettZeichnen();
       }
@@ -2954,7 +3048,7 @@ $("rollBtn").onclick = async () => {
       geschlagenVorher: z.geschlagen
     };
   } catch (e) { stand.zugInfo = null; }
-  verlauf = [];
+  verlauf = []; zugListe = [];
   if (aktuellesSpiel.training) trainingVorher = klon(stand);
   brettZeichnen();
   await spielSpeichern(false);
@@ -2968,13 +3062,34 @@ $("chatText").onkeydown = (e) => { if (e.key === "Enter") $("chatSend").click();
 
 $("undoBtn").onclick = async () => {
   if (!verlauf.length) return;
-  stand = verlauf.pop();
+  stand = verlauf.pop(); zugListe.pop();
   gewaehlt = null;
   brettZeichnen();
   await spielSpeichern(false);
 };
 $("endBtn").onclick = zugAbschliessen;
 $("startTraining").onclick = trainingStarten;
+$("letzterBtn").onclick = () => {
+  const lz = stand && stand.letzterZug;
+  if (!lz) return;
+  if (vorschauAktiv && vorschau && vorschau.art === "letzter"){
+    vorschauAktiv = false; vorschau = null; brettZeichnen(); return;
+  }
+  const name = nameOf(lz.sitz === 1 ? aktuellesSpiel.p1 : aktuellesSpiel.p2);
+  const wer = /[sxzß]$/i.test(name) ? name + "’" : name + "s";
+  const ichWars = lz.sitz === sitz(aktuellesSpiel.id);
+  const d = new Date(lz.zeit);
+  const heute = new Date().toDateString() === d.toDateString();
+  const wann = (heute ? "heute" : d.toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit" }))
+    + " " + d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+  const st0 = klon({ ...lz.vorher, gewinner: null, art: 1, erst: { 1: null, 2: null } });
+  const text = lz.zuege.length ? zugText(st0, lz.zuege) : "kein Zug möglich";
+  vorschau = { art: "letzter", stand: st0, zuege: [lz.zuege], fokus: 0,
+    titel: `${ichWars ? "Dein" : wer} letzter Zug: ${lz.wurf.join(" und ")} — ${text}`,
+    hinweis: `Gezogen ${wann}. Tipp aufs Brett oder auf den Knopf, um zurückzukehren.` };
+  vorschauAktiv = true;
+  brettZeichnen();
+};
 $("weiterBtn").onclick = () => { if (weiterFreigabe) weiterFreigabe(); };
 $("offBtn").onclick = async () => {
   if (!stand || gewaehlt === null) return;
