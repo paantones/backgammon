@@ -314,6 +314,17 @@ ul.log li.edit .btn{width:auto;padding:9px 16px}
         <div id="gameList"><p class="empty">Noch keine.</p></div>
       </div>
 
+      <div class="panel" id="pushPanel">
+        <p class="eyebrow">Benachrichtigungen</p>
+        <p class="note" id="pushText" style="margin:0 0 12px">Wird geprüft …</p>
+        <div class="field hidden" id="pushWerFeld">
+          <label for="pushWer">Benachrichtigen, wenn dran ist:</label>
+          <select id="pushWer"></select>
+        </div>
+        <button class="btn hidden" id="pushAn">Benachrichtigungen einschalten</button>
+        <button class="ghost hidden" id="pushAus" style="width:100%;margin-top:8px;padding:10px">ausschalten</button>
+      </div>
+
       <details class="panel alt" id="archivPanel">
         <summary>Beendete Partien</summary>
         <div id="archivList"><p class="empty">Noch keine.</p></div>
@@ -499,9 +510,28 @@ let editingId = null;
 }
 
 // --- Passwort ---
+async function spielAusNachricht(id){
+  if (!id) return;
+  await spieleLaden();
+  const g = games.find(x => x.id === id);
+  if (g) await spielOeffnen(g, { frage: false });
+  else zeigeAnsicht("gamesView");
+}
+
 function unlock(){
   $("gate").classList.add("hidden");
   $("app").classList.remove("hidden");
+  if (pushMoeglich()){
+    swRegistrieren();
+    navigator.serviceWorker.addEventListener("message", (e) => {
+      if (e.data && e.data.typ === "spiel") spielAusNachricht(e.data.id);
+    });
+  }
+  const sprung = (location.hash.match(/spiel=([^&]+)/) || [])[1];
+  if (sprung){
+    history.replaceState({ ansicht: "mainView" }, "", location.pathname);
+    setTimeout(() => spielAusNachricht(decodeURIComponent(sprung)), 1200);
+  }
   try { history.replaceState({ ansicht: "mainView" }, ""); } catch (e) {}
   try { localStorage.setItem("bgl-pw", PASSWORT); } catch(e){}
   $("stand").textContent = "verbinde …";
@@ -2440,6 +2470,10 @@ async function partieAbschliessen(){
   brettZeichnen();
   if (training){ await trainingSichern(true); return; }
   await ergebnisEintragen();
+  {
+    const g = aktuellesSpiel, art = stand.art === 3 ? "Backgammon" : stand.art === 2 ? "Gammon" : "einfacher Sieg";
+    benachrichtigen(gegnerVon(g, stand.gewinner), "Partie vorbei", `${nameOf(spielerVon(g, stand.gewinner))} hat gewonnen — ${art}.`, g.id);
+  }
 }
 
 function zugFertig(){
@@ -2575,8 +2609,13 @@ async function zugAbschliessen(){
   letztenZugMerken();
   const nachher = stand;
   zugArchivieren(stand.letzterZug, nachher);
+  const ichSitz = stand.turn;
   stand = zugBeenden(stand);
   stand.zug = null;
+  if (!aktuellesSpiel.training){
+    const g = aktuellesSpiel;
+    benachrichtigen(gegnerVon(g, ichSitz), "Du bist dran", `${nameOf(spielerVon(g, ichSitz))} hat gezogen.`, g.id);
+  }
   verlauf = []; zugListe = [];
   brettZeichnen();
   await spielSpeichern(false);
@@ -2641,6 +2680,105 @@ function dialog(titel, text, knoepfe){
     history.pushState({ dialog: true }, "");
   });
 }
+
+// ---------- Benachrichtigungen ----------
+const VAPID_OEFFENTLICH = "BImfmwtHida52mthilbJEt1VmPpQXwO7DdlP6A7uCw4U8BTUp1uKylSUTQysW8ur7bUzVcztEh2fZaYvxsGxO1M";
+let swReg = null;
+
+async function swRegistrieren(){
+  if (!("serviceWorker" in navigator)) return null;
+  try { swReg = await navigator.serviceWorker.register("/sw.js"); } catch (e) { swReg = null; }
+  return swReg;
+}
+
+function bytesAusBase64Url(t){
+  const b = atob((t + "=".repeat((4 - t.length % 4) % 4)).replace(/-/g, "+").replace(/_/g, "/"));
+  return Uint8Array.from(b, c => c.charCodeAt(0));
+}
+const istIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+const vomStartbildschirm = () => (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) || navigator.standalone === true;
+const pushMoeglich = () => "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+
+async function pushAnzeigen(){
+  const text = $("pushText"), an = $("pushAn"), aus = $("pushAus"), feld = $("pushWerFeld");
+  if (!text) return;
+  const zeig = (t, f, a, b) => { text.textContent = t; feld.classList.toggle("hidden", !f); an.classList.toggle("hidden", !a); aus.classList.toggle("hidden", !b); };
+
+  if (!pushMoeglich()){
+    if (istIOS() && !vomStartbildschirm())
+      return zeig("Auf dem iPhone geht das nur, wenn BätsXherei auf dem Home-Bildschirm liegt: in Safari auf Teilen → „Zum Home-Bildschirm“, dann die App von dort öffnen und hier einschalten.", false, false, false);
+    return zeig("Dieser Browser kann keine Benachrichtigungen empfangen.", false, false, false);
+  }
+  if (Notification.permission === "denied")
+    return zeig("Benachrichtigungen sind für BätsXherei blockiert. Das lässt sich nur in den Einstellungen des Browsers bzw. des Handys wieder erlauben.", false, false, false);
+
+  const reg = swReg || await swRegistrieren();
+  let abo = null;
+  try { abo = reg ? await reg.pushManager.getSubscription() : null; } catch (e) {}
+  const sel = $("pushWer");
+  const mich = ich();
+  const gespeichert = (() => { try { return localStorage.getItem("bgl-push-spieler"); } catch (e) { return null; } })();
+  sel.innerHTML = `<option value="">Person wählen</option>` + players.map(p => `<option value="${p.id}"></option>`).join("");
+  [...sel.options].slice(1).forEach((o, i) => o.textContent = players[i].name);
+  sel.value = gespeichert || mich || "";
+
+  if (abo && Notification.permission === "granted"){
+    const wer = gespeichert ? nameOf(gespeichert) : "dieses Gerät";
+    return zeig(`Eingeschaltet für ${wer}. Du bekommst eine Nachricht, sobald du in einer Partie dran bist.`, false, false, true);
+  }
+  zeig("Lass dich benachrichtigen, sobald du in einer Partie dran bist — auch wenn die App geschlossen ist.", true, true, false);
+}
+
+async function pushEinschalten(){
+  const wer = $("pushWer").value;
+  if (!wer){ $("pushText").textContent = "Bitte erst auswählen, wer du bist."; return; }
+  // Die Erlaubnis muss direkt aus dem Tippen heraus erfragt werden (vor allem auf dem iPhone)
+  let erlaubnis = "default";
+  try { erlaubnis = await Notification.requestPermission(); } catch (e) {}
+  if (erlaubnis !== "granted"){ await pushAnzeigen(); return; }
+  try {
+    const reg = swReg || await swRegistrieren();
+    if (!reg) throw new Error("Hintergrunddienst ließ sich nicht starten.");
+    await navigator.serviceWorker.ready;
+    let abo = await reg.pushManager.getSubscription();
+    if (!abo) abo = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: bytesAusBase64Url(VAPID_OEFFENTLICH) });
+    const j = abo.toJSON();
+    const r = await withTimeout(db.from("push_abos").upsert({
+      endpoint: j.endpoint, spieler: wer, device: deviceId, abo: j, updated_at: new Date().toISOString()
+    }));
+    if (r && r.error) throw new Error(r.error.message);
+    try { localStorage.setItem("bgl-push-spieler", wer); } catch (e) {}
+  } catch (e) {
+    $("pushText").textContent = "Einschalten hat nicht geklappt: " + (e && e.message || e);
+    return;
+  }
+  await pushAnzeigen();
+}
+
+async function pushAusschalten(){
+  try {
+    const reg = swReg || await swRegistrieren();
+    const abo = reg ? await reg.pushManager.getSubscription() : null;
+    if (abo){
+      await withTimeout(db.from("push_abos").delete().eq("endpoint", abo.endpoint));
+      await abo.unsubscribe();
+    }
+    localStorage.removeItem("bgl-push-spieler");
+  } catch (e) {}
+  await pushAnzeigen();
+}
+
+// Nachricht an eine Person schicken (läuft über die Supabase-Funktion "benachrichtigen")
+function benachrichtigen(spielerId, titel, text, spielId){
+  if (!spielerId || !db.functions) return;
+  try {
+    db.functions.invoke("benachrichtigen", { body: { spieler: spielerId, titel, text, spiel: spielId || null } })
+      .catch(() => {});
+  } catch (e) {}
+}
+
+function gegnerVon(g, sitzNr){ return sitzNr === 1 ? g.p2 : g.p1; }
+function spielerVon(g, sitzNr){ return sitzNr === 1 ? g.p1 : g.p2; }
 
 // ---------- Training ----------
 let weiterFreigabe = null;
@@ -2923,6 +3061,13 @@ async function eroeffnungSenden(meinSitz){
     if (kontrolle.phase === "spiel" || gleichstand || kontrolle.erst[meinSitz] === augen){
       stand = kontrolle;
       brettZeichnen();
+      const g = aktuellesSpiel, gegenueber = gegnerVon(g, meinSitz), ichName = nameOf(spielerVon(g, meinSitz));
+      if (kontrolle.phase === "spiel" && kontrolle.turn !== meinSitz)
+        benachrichtigen(gegenueber, "Du beginnst", `Eröffnungswurf gewonnen gegen ${ichName} — du bist dran.`, g.id);
+      else if (gleichstand)
+        benachrichtigen(gegenueber, "Gleich hoch", `Eröffnung gegen ${ichName} unentschieden — bitte noch einmal werfen.`, g.id);
+      else if (kontrolle.phase === "eroeffnung" && kontrolle.erst[meinSitz === 1 ? 2 : 1] == null)
+        benachrichtigen(gegenueber, "Eröffnungswurf", `${ichName} hat geworfen — jetzt du.`, g.id);
       return;
     }
   }
@@ -3101,7 +3246,7 @@ function zeigeAnsicht(name, ausVerlauf, spielId){
     if (aktuellesSpiel && aktuellesSpiel.training) aktuellesSpiel = null;
   }
   if (name === "statsView") renderStats();
-  if (name === "gamesView"){ renderGames(); trainingSuchen(); }
+  if (name === "gamesView"){ renderGames(); trainingSuchen(); pushAnzeigen(); }
   window.scrollTo(0, 0);
 }
 
@@ -3150,6 +3295,7 @@ $("startGame").onclick = async () => {
     sitzSetzen(g.id, hell === a ? 1 : 2);
     zeig("");
     renderGames();
+    benachrichtigen(b, "Neue Partie", `${nameOf(a)} fordert dich heraus. Wirf deinen Eröffnungswürfel.`, g.id);
   } catch (e) { zeig(e.message); }
 };
 $("rollBtn").onclick = async () => {
@@ -3191,6 +3337,8 @@ $("undoBtn").onclick = async () => {
 };
 $("endBtn").onclick = zugAbschliessen;
 $("startTraining").onclick = trainingStarten;
+$("pushAn").onclick = pushEinschalten;
+$("pushAus").onclick = pushAusschalten;
 $("weiterTraining").onclick = trainingFortsetzen;
 $("statMode").onchange = zeichneChart;
 $("actWho").onchange = zeichneAktivitaet;
