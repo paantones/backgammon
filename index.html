@@ -60,7 +60,16 @@ h1{font-family:'Fraunces',Georgia,serif;font-weight:800;font-size:clamp(30px,7vw
 .nachkopf.gut{color:#2F5D3A}
 .kandidat{border-top:1px solid var(--line)}
 .kandidat:first-of-type{border-top:none}
-.kandidat summary{list-style:none;cursor:pointer;display:grid;grid-template-columns:22px 1fr auto;gap:8px;align-items:baseline;padding:10px 0}
+.kandidat summary{list-style:none;cursor:pointer;display:grid;grid-template-columns:28px 1fr auto;gap:8px;align-items:center;padding:10px 0}
+.rangstein{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;
+  border:1px solid #7A5231;font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;
+  box-shadow:inset 0 -2px 0 rgba(0,0,0,.18);cursor:pointer}
+.rangstein.r1{background:#2E8B3E;color:#F5EFE2}
+.rangstein.r2{background:#F4DD6B;color:#2A1D14}
+.rangstein.r3{background:#C99A12;color:#2A1D14}
+.rangstein.rx{background:var(--horn);color:var(--pearl);cursor:default}
+.rangstein.fokus{outline:2px solid var(--horn);outline-offset:2px}
+.vorschauknopf{margin:4px 0 12px}
 .kandidat summary::-webkit-details-marker{display:none}
 .kandidat .rang{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--ink-soft)}
 .kandidat .zug{font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:600}
@@ -337,7 +346,8 @@ ul.log li.edit .btn{width:auto;padding:9px 16px}
 
       <div class="panel hidden" id="nachPanel">
         <p class="eyebrow">Nachbetrachtung</p>
-        <div id="nachInhalt"><p class="empty">Erscheint, sobald du deinen ersten Zug beendet hast.</p></div>
+        <div id="nachInhalt"></div>
+        <button class="btn hidden" id="weiterBtn" style="margin-top:12px">Weiter — Computer zieht</button>
       </div>
 
       <div class="panel" id="zurufPanel">
@@ -1881,7 +1891,48 @@ function punktGeometrie(roh){
   return { x, breite, oben, hoehe: bh, yTop: oben ? 6 : H - 6 - bh };
 }
 
+function steinPunkt(st, feld, sp){
+  const barX = 10 + 6*((360-36)/12) + 8;
+  if (feld === "bar") return { x: barX, y: (sp === 1) !== gedreht() ? 188 : 112 };
+  if (feld === "off"){
+    const unten = (sp === 1) !== gedreht();
+    return { x: 350, y: unten ? 240 : 60 };
+  }
+  const G = punktGeometrie(feld);
+  const k = Math.max(0, Math.min(Math.abs(st.pts[feld]), 5) - 1);
+  return { x: G.x + G.breite / 2, y: G.oben ? G.yTop + 11 + k*20 : G.yTop + G.hoehe - 11 - k*20 };
+}
+
+function vorschauEbene(){
+  if (!vorschauAktiv || !vorschau) return "";
+  let g = "";
+  [2, 1, 0].forEach(i => {
+    const folge = vorschau.zuege[i];
+    if (!folge || (vorschau.fokus !== null && vorschau.fokus !== i)) return;
+    const farbe = VORSCHAU_FARBEN[i], versatz = (i - 1) * 3;
+    const alleDrei = vorschau.fokus === null;
+    const r = alleDrei ? 7.5 : 9.5, dx = alleDrei ? (i - 1) * 7 : 0;
+    let st = vorschau.stand;
+    folge.forEach(z => {
+      const von = steinPunkt(st, z.von, st.turn);
+      const neu = anwenden(st, z);
+      const nach = steinPunkt(neu, z.zu, st.turn);
+      g += `<line x1="${(von.x + versatz).toFixed(1)}" y1="${von.y.toFixed(1)}" x2="${(nach.x + versatz).toFixed(1)}" y2="${nach.y.toFixed(1)}" stroke="${farbe}" stroke-width="5" stroke-linecap="round" opacity="0.5"/>`;
+      g += `<circle cx="${(nach.x + dx).toFixed(1)}" cy="${nach.y.toFixed(1)}" r="${r}" fill="${farbe}" opacity="0.5" stroke="${farbe}" stroke-width="1.5"/>`;
+      g += `<text x="${(nach.x + dx).toFixed(1)}" y="${(nach.y + 3.5).toFixed(1)}" text-anchor="middle" font-family="ui-monospace,monospace" font-size="${alleDrei ? 9 : 10}" font-weight="700" fill="#1B120B">${i + 1}</text>`;
+      st = neu;
+    });
+  });
+  return g;
+}
+
 function zeichneBrett(){
+  const echt = stand;
+  if (vorschauAktiv && vorschau) stand = vorschau.stand;      // Rückblick: Stellung vor dem eigenen Zug
+  try { zeichneBrettInnen(); } finally { stand = echt; }
+}
+
+function zeichneBrettInnen(){
   const svg = $("board");
   if (!svg || !stand) return;
   const meinSitz = aktuellesSpiel ? (sitz(aktuellesSpiel.id) || 0) : 0;
@@ -1898,7 +1949,7 @@ function zeichneBrett(){
     g += `<polygon points="${pfad}" fill="${farbe}" opacity="0.9"/>`;
   }
 
-  const ziele = gewaehlt !== null ? legaleZuege(stand).filter(z => z.von === gewaehlt) : [];
+  const ziele = (gewaehlt !== null && !vorschauAktiv) ? legaleZuege(stand).filter(z => z.von === gewaehlt) : [];
   ziele.forEach(z => {
     if (z.zu === "off") return;
     const G = punktGeometrie(z.zu);
@@ -1958,6 +2009,7 @@ function zeichneBrett(){
   if (gewaehlt !== null && legaleZuege(stand).some(z => z.von === gewaehlt && z.zu === "off")){
     g += `<rect x="0" y="130" width="10" height="40" fill="#8C3226" opacity="0.8" data-pt="off"/>`;
   }
+  g += vorschauEbene();
   svg.innerHTML = g;
 }
 
@@ -2070,7 +2122,19 @@ async function ergebnisEintragen(){
   } catch (e) { /* stumm */ }
 }
 
-function brettZeichnen(){ zeichneBrett(); brettStatus(); rausKnopf(); ergebnisZeigen(); }
+function brettZeichnen(){
+  zeichneBrett(); brettStatus(); rausKnopf(); ergebnisZeigen();
+  if (vorschauAktiv){
+    $("boardStatus").textContent = "Rückblick: Stellung vor deinem letzten Zug";
+    $("boardHinweis").textContent = weiterFreigabe
+      ? "Tipp auf „Weiter“, dann zieht der Computer."
+      : "Tipp aufs Brett, um zur aktuellen Stellung zurückzukehren.";
+  }
+  const vb = $("vorschauBtn");
+  if (vb) vb.textContent = vorschauAktiv ? "Zurück zur aktuellen Stellung" : "Auf dem Brett zeigen";
+  document.querySelectorAll(".rangstein[data-fokus]").forEach(el =>
+    el.classList.toggle("fokus", vorschauAktiv && vorschau && vorschau.fokus === Number(el.dataset.fokus)));
+}
 
 function rausKnopf(){
   const k = $("offBtn");
@@ -2297,7 +2361,10 @@ async function zugMachen(zug){
 
 async function partieAbschliessen(){
   const training = aktuellesSpiel && aktuellesSpiel.training;
-  if (training && stand.turn === 1 && trainingVorher) nachbetrachtung(trainingVorher, stand);   // letzter eigener Zug
+  if (training && stand.turn === 1 && trainingVorher){
+    nachbetrachtung(trainingVorher, stand);                                    // letzter eigener Zug
+    $("nachPanel").classList.remove("hidden");
+  }
   rauswurfVerbuchen();
   verlauf = [];
   await spielSpeichern(true);
@@ -2339,6 +2406,7 @@ async function zugAbschliessen(){
   await spielSpeichern(false);
   if (aktuellesSpiel && aktuellesSpiel.training){
     nachbetrachtung(trainingVorher, nachher);
+    await aufWeiterWarten();
     await computerZug();
   }
 }
@@ -2398,7 +2466,35 @@ function dialog(titel, text, knoepfe){
 }
 
 // ---------- Training ----------
+let weiterFreigabe = null;
+
+// Rückblick zeigen und warten, bis "Weiter" getippt wird
+function aufWeiterWarten(){
+  $("nachPanel").classList.remove("hidden");
+  $("weiterBtn").classList.remove("hidden");
+  vorschauAktiv = !!vorschau;
+  if (vorschau) vorschau.fokus = null;
+  brettZeichnen();
+  $("boardHinweis").textContent = "Tipp auf „Weiter“, dann zieht der Computer.";
+  return new Promise(fertig => {
+    weiterFreigabe = () => {
+      weiterFreigabe = null;
+      $("weiterBtn").classList.add("hidden");
+      vorschauAktiv = false;
+      brettZeichnen();
+      fertig();
+    };
+  });
+}
+
+function nachbetrachtungVerbergen(){
+  $("nachPanel").classList.add("hidden");
+  $("weiterBtn").classList.add("hidden");
+  vorschauAktiv = false;
+}
 let trainingVorher = null, trainingId = null, trainingLog = [];
+let vorschau = null, vorschauAktiv = false;
+const VORSCHAU_FARBEN = ["#2E8B3E", "#F4DD6B", "#C99A12"];
 
 async function trainingAnlegen(){
   trainingId = null; trainingLog = [];
@@ -2420,8 +2516,8 @@ const pause = (ms) => new Promise(r => setTimeout(r, ms));
 function trainingStarten(){
   trainingProfil = $("tProfil").value || "ausgewogen";
   const g = { id: "training", p1: "du", p2: "cpu", status: "laufend", training: true, state: neuerStand() };
-  trainingVorher = null;
-  $("nachInhalt").innerHTML = `<p class="empty">Erscheint, sobald du deinen ersten Zug beendet hast.</p>`;
+  trainingVorher = null; vorschau = null; vorschauAktiv = false; weiterFreigabe = null;
+  $("nachInhalt").innerHTML = "";
   spielOeffnen(g, { frage: false });
   trainingAnlegen();
 }
@@ -2522,7 +2618,7 @@ function nachbetrachtung(vorher, nachher){
     const m = k.m;
     return `<details class="kandidat ${deiner ? "deiner" : ""}">
       <summary>
-        <span class="rang">${rang}.</span>
+        ${rang <= 3 ? `<span class="rangstein r${rang} ${vorschauAktiv && vorschau && vorschau.fokus === rang - 1 ? "fokus" : ""}" data-fokus="${rang - 1}" title="auf dem Brett zeigen">${rang}</span>` : `<span class="rangstein rx">${rang}</span>`}
         <span><span class="zug">${zugText(vorher, k.zuege)}</span>${et ? `<span class="etikett">${et}</span>` : ""}${deiner ? `<span class="etikett" style="background:#8C3226">dein Zug</span>` : ""}</span>
         <span class="kurz">Risiko ${prozent(m.risiko)}</span>
       </summary>
@@ -2539,7 +2635,10 @@ function nachbetrachtung(vorher, nachher){
       </div>
     </details>`;
   };
-  $("nachInhalt").innerHTML = kopf + zeige.map(zeile).join("")
+  vorschau = { stand: klon(vorher), zuege: alle.slice(0, 3).map(k => k.zuege), fokus: null };
+  vorschauAktiv = false;
+  const knopf = `<button class="ghost vorschauknopf" id="vorschauBtn">Auf dem Brett zeigen</button>`;
+  $("nachInhalt").innerHTML = kopf + knopf + zeige.map(zeile).join("")
     + `<p class="note" style="margin-top:10px">Die Bewertung schaut einen Zug weit und wiegt Augen, Risiko, gebaute Punkte und Blockaden gegeneinander ab. Kein Profiprogramm — aber das Trefferrisiko ist exakt gerechnet.</p>`;
 }
 
@@ -2552,7 +2651,8 @@ async function spielOeffnen(g, { frage = true, ausVerlauf = false } = {}){
   aktuellesSpiel = g;
   stand = g.state; verlauf = []; gewaehlt = null;
   zeigeAnsicht("boardView", ausVerlauf, g.id);
-  $("nachPanel").classList.toggle("hidden", !g.training);
+  $("nachPanel").classList.add("hidden");
+  $("weiterBtn").classList.add("hidden");
   $("zurufPanel").classList.toggle("hidden", !!g.training);
   if (g.training){ brettZeichnen(); return; }
   if (g.status === "laufend") kanalOeffnen(g.id);
@@ -2623,6 +2723,29 @@ async function abgleichen(){
 }
 
 document.addEventListener("click", async (e) => {
+  if (e.target.id === "vorschauBtn"){
+    vorschauAktiv = !vorschauAktiv;
+    if (vorschau) vorschau.fokus = null;
+    brettZeichnen();
+    if (vorschauAktiv && $("board").scrollIntoView) $("board").scrollIntoView({ behavior: "smooth", block: "center" });
+    return;
+  }
+  const fokus = e.target.dataset?.fokus;
+  if (fokus !== undefined && vorschau){
+    e.preventDefault();                                   // Aufklappen nicht auslösen
+    const n = Number(fokus);
+    if (vorschauAktiv && vorschau.fokus === n){ vorschauAktiv = false; vorschau.fokus = null; }
+    else { vorschauAktiv = true; vorschau.fokus = n; }
+    brettZeichnen();
+    if (vorschauAktiv && $("board").scrollIntoView) $("board").scrollIntoView({ behavior: "smooth", block: "center" });
+    return;
+  }
+  if (vorschauAktiv && e.target.dataset?.pt !== undefined){
+    if (weiterFreigabe){ weiterFreigabe(); return; }       // Tipp aufs Brett = weiter
+    vorschauAktiv = false;
+    brettZeichnen();
+    return;
+  }
   const pt = e.target.dataset?.pt;
   if (pt !== undefined && stand && aktuellesSpiel){
     const meinSitz = sitz(aktuellesSpiel.id);
@@ -2805,6 +2928,8 @@ $("startGame").onclick = async () => {
 };
 $("rollBtn").onclick = async () => {
   if (!stand || !aktuellesSpiel) return;
+  if (aktuellesSpiel.training) nachbetrachtungVerbergen();
+  if (vorschauAktiv){ vorschauAktiv = false; brettZeichnen(); }
   const meinSitz = sitz(aktuellesSpiel.id);
 
   if (stand.phase === "eroeffnung"){
@@ -2850,6 +2975,7 @@ $("undoBtn").onclick = async () => {
 };
 $("endBtn").onclick = zugAbschliessen;
 $("startTraining").onclick = trainingStarten;
+$("weiterBtn").onclick = () => { if (weiterFreigabe) weiterFreigabe(); };
 $("offBtn").onclick = async () => {
   if (!stand || gewaehlt === null) return;
   const zug = legaleZuege(stand).find(z => z.von === gewaehlt && z.zu === "off");
