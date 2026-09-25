@@ -2222,7 +2222,7 @@ function ergebnisZeigen(){
   const fmt = (v, komma) => {
     if (typeof v === "string") return v;
     if (komma === "vorzeichen") return (v > 0 ? "+" : v < 0 ? "−" : "±") + Math.abs(v).toFixed(1).replace(".", ",");
-    return komma ? v.toFixed(komma === true && Math.abs(v) < 10 ? 1 : 2).replace(".", ",") : String(v);
+    return komma ? v.toFixed(1).replace(".", ",") : String(v);
   };
   let h = `<div class="stattab"><span class="k"></span><span class="k z" data-n="1"></span><span class="k z" data-n="2"></span>`;
   zeilen.forEach(([titel, x, y, richtung, komma]) => {
@@ -2444,6 +2444,24 @@ async function partieAbschliessen(){
 
 function zugFertig(){
   return !!stand && stand.wurf.length > 0 && (stand.gewinner || legaleZuege(stand).length === 0);
+}
+
+// Würfeln und dabei festhalten, was vor dem Wurf möglich gewesen wäre — für Mensch und Computer gleich
+function wuerfelnMitAnalyse(st){
+  let analyse = { p: 0, erwUngenutzt: 0 };
+  try { analyse = wurfAnalyse(st); } catch (e) {}
+  const n = wuerfeln(st);
+  const z = n.stats[n.turn];
+  try {
+    z.ungenutzt += n.rest.length - maxNutzbar(n);
+    z.ungenutztErwartet += analyse.erwUngenutzt;
+    n.zugInfo = {
+      p: analyse.p,
+      moeglich: analyse.p > 0 ? kannSchlagen(n) : false,
+      geschlagenVorher: z.geschlagen
+    };
+  } catch (e) { n.zugInfo = null; }
+  return n;
 }
 
 function rauswurfVerbuchen(){
@@ -2741,7 +2759,7 @@ async function computerZug(nachEroeffnung){
   if (!aktuellesSpiel || !aktuellesSpiel.training || stand.gewinner || stand.turn !== 2) return;
   if (!nachEroeffnung && !stand.wurf.length){
     await pause(650);
-    stand = wuerfeln(stand);
+    stand = wuerfelnMitAnalyse(stand);
     brettZeichnen();
     trainingSichern(false);                         // Wurf steht fest, auch wenn jetzt geschlossen wird
     await pause(800);
@@ -2760,6 +2778,8 @@ async function computerZug(nachEroeffnung){
     await pause(550);
   }
   if (!folge.length){ await pause(700); }
+  if (!folge.length && stand.stats && stand.stats[2]) stand.stats[2].blockiert += 1;
+  rauswurfVerbuchen();
   stand = zugBeenden(stand);
   stand.zug = null;
   aktuellesSpiel.state = stand;
@@ -3147,19 +3167,7 @@ $("rollBtn").onclick = async () => {
   }
 
   if (stand.wurf.length || stand.turn !== meinSitz) return;
-  let analyse = { p: 0, erwUngenutzt: 0 };
-  try { analyse = wurfAnalyse(stand); } catch (e) {}
-  stand = wuerfeln(stand);
-  const z = stand.stats[stand.turn];
-  try {
-    z.ungenutzt += stand.rest.length - maxNutzbar(stand);
-    z.ungenutztErwartet += analyse.erwUngenutzt;
-    stand.zugInfo = {
-      p: analyse.p,
-      moeglich: analyse.p > 0 ? kannSchlagen(stand) : false,
-      geschlagenVorher: z.geschlagen
-    };
-  } catch (e) { stand.zugInfo = null; }
+  stand = wuerfelnMitAnalyse(stand);
   verlauf = []; zugListe = [];
   stand.zug = null;
   if (aktuellesSpiel.training){ trainingVorher = klon(stand); trainingSichern(false); }
