@@ -290,7 +290,8 @@ ul.log li.edit .btn{width:auto;padding:9px 16px}
             <option value="anker">Ankerspieler*in — wartet hinten</option>
           </select>
         </div>
-        <button class="btn" id="startTraining">Training starten</button>
+        <button class="btn hidden" id="weiterTraining" style="margin-bottom:10px"></button>
+        <button class="btn" id="startTraining">Neues Training starten</button>
         <p class="note">Zählt nicht für die Liga. Nach jedem deiner Züge zeigt die Nachbetrachtung, was die Maschine gespielt hätte.</p>
       </div>
 
@@ -2375,13 +2376,50 @@ function kanalSchliessen(){
 }
 
 // Jeder Zwischenschritt wird live übertragen — dran ist die Gegenseite aber erst nach "Zug beenden"
+// Der laufende Zug steht im Spielstand: Stellung zu Zugbeginn plus jede Bewegung.
+// So bleibt er über Neuladen und Schließen hinweg erhalten — ohne neu würfeln zu können.
+function kompakt(st){
+  return { pts: st.pts.slice(), bar: { ...st.bar }, off: { ...st.off }, turn: st.turn,
+           wurf: (st.wurf || []).slice(), rest: (st.rest || []).slice(),
+           stats: JSON.parse(JSON.stringify(st.stats || {})), zugInfo: st.zugInfo || null };
+}
+
+function zugBasisVoll(){
+  if (!stand || !stand.zug) return stand;
+  const b = stand.zug.basis, s = klon(stand);
+  s.pts = b.pts.slice(); s.bar = { ...b.bar }; s.off = { ...b.off }; s.turn = b.turn;
+  s.wurf = b.wurf.slice(); s.rest = b.rest.slice();
+  s.stats = JSON.parse(JSON.stringify(b.stats || {})); s.zugInfo = b.zugInfo || null;
+  s.gewinner = null; s.art = 1; s.zug = { basis: b, liste: [] };
+  return klon(s);
+}
+
+function verlaufWiederherstellen(){
+  verlauf = []; zugListe = [];
+  if (!stand || !stand.zug || !Array.isArray(stand.zug.liste) || !stand.zug.liste.length) return;
+  const liste = stand.zug.liste;
+  try {
+    let s = zugBasisVoll();
+    liste.forEach((z, i) => {
+      const vor = klon(s);
+      vor.zug = { basis: stand.zug.basis, liste: liste.slice(0, i) };
+      verlauf.push(vor); zugListe.push(z);
+      s = anwenden(s, z);
+    });
+  } catch (e) { verlauf = []; zugListe = []; }
+}
+
 async function zugMachen(zug){
+  if (!stand.zug) stand.zug = { basis: kompakt(stand), liste: [] };
   verlauf.push(klon(stand)); zugListe.push(zug);
+  const weiter = { basis: stand.zug.basis, liste: stand.zug.liste.concat([{ von: zug.von, zu: zug.zu, die: zug.die }]) };
   stand = anwenden(stand, zug);
+  stand.zug = weiter;
   gewaehlt = null;
   if (stand.gewinner){ await partieAbschliessen(); return; }   // letzter Stein draußen: sofort Schluss
   brettZeichnen();
   await spielSpeichern(false);
+  if (aktuellesSpiel && aktuellesSpiel.training) trainingSichern(false);
 }
 
 async function partieAbschliessen(){
@@ -2390,8 +2428,10 @@ async function partieAbschliessen(){
     letztenZugMerken();
     zugArchivieren(stand.letzterZug, stand);
   }
-  if (training && stand.turn === 1 && trainingVorher){
-    nachbetrachtung(trainingVorher, stand);                                    // letzter eigener Zug
+  if (training && stand.turn === 1){
+    const b = zugBasisVoll();
+    trainingZugSchreiben(b, stand, (stand.zug ? stand.zug.liste : zugListe).slice(), 1);
+    nachbetrachtung(b, stand);                                    // letzter eigener Zug
     $("nachPanel").classList.remove("hidden");
   }
   rauswurfVerbuchen();
@@ -2446,6 +2486,27 @@ function zugBewerten(vorher, nachher){
   };
 }
 
+// Trainingszüge in dieselbe Zugtabelle schreiben (markiert als Training)
+let trainingNr = 0;
+function trainingZugSchreiben(basis, nachher, zuege, sitzNr, zusatz){
+  if (!trainingId) return;
+  const id = trainingId, nr = ++trainingNr;
+  const spieler = sitzNr === 1 ? (ich() || null) : null;
+  setTimeout(async () => {
+    let bewertung = null;
+    try { bewertung = { ...zugBewerten(basis, nachher), ...(zusatz || {}) }; }
+    catch (e) { bewertung = { fehler: String(e && e.message || e), ...(zusatz || {}) }; }
+    try {
+      await withTimeout(db.from("spielzuege").insert({
+        game: id, nr, sitz: sitzNr, spieler, device: sitzNr === 1 ? deviceId : null,
+        wurf: (basis.wurf || []).slice(), zuege: zuege.map(z => ({ von: z.von, zu: z.zu, die: z.die })),
+        vorher: { pts: basis.pts.slice(), bar: { ...basis.bar }, off: { ...basis.off } },
+        bewertung, training: true
+      }));
+    } catch (e) {}
+  }, 60);
+}
+
 // Jeden beendeten Online-Zug als eigene Zeile ablegen (läuft im Hintergrund)
 function zugArchivieren(lz, nachher){
   if (!lz || !aktuellesSpiel || aktuellesSpiel.training) return;
@@ -2471,13 +2532,14 @@ function zugArchivieren(lz, nachher){
 // Letzten Zug im Spielstand festhalten — für alle, die zeitversetzt spielen
 function letztenZugMerken(){
   if (!stand || !aktuellesSpiel || aktuellesSpiel.training) return;
-  const basis = verlauf.length ? verlauf[0] : stand;
+  const basis = zugBasisVoll();
+  const liste = stand.zug ? stand.zug.liste : zugListe;
   stand.zugNr = (stand.zugNr || 0) + 1;
   stand.letzterZug = {
     nr: stand.zugNr,
     sitz: basis.turn,
     wurf: (basis.wurf || []).slice(),
-    zuege: zugListe.map(z => ({ von: z.von, zu: z.zu, die: z.die })),
+    zuege: liste.map(z => ({ von: z.von, zu: z.zu, die: z.die })),
     zeit: new Date().toISOString(),
     vorher: { pts: basis.pts.slice(), bar: { ...basis.bar }, off: { ...basis.off },
               turn: basis.turn, wurf: (basis.wurf || []).slice(), rest: (basis.rest || []).slice(), phase: "spiel" }
@@ -2491,15 +2553,18 @@ async function zugAbschliessen(){
   rauswurfVerbuchen();
   if (stand.gewinner){ await partieAbschliessen(); return; }
   if (verlauf.length === 0 && stand.stats && stand.stats[stand.turn]) stand.stats[stand.turn].blockiert += 1;
+  const trainingBasis = zugBasisVoll(), trainingZuege = (stand.zug ? stand.zug.liste : zugListe).slice();
   letztenZugMerken();
   const nachher = stand;
   zugArchivieren(stand.letzterZug, nachher);
   stand = zugBeenden(stand);
+  stand.zug = null;
   verlauf = []; zugListe = [];
   brettZeichnen();
   await spielSpeichern(false);
   if (aktuellesSpiel && aktuellesSpiel.training){
-    nachbetrachtung(trainingVorher, nachher);
+    trainingZugSchreiben(trainingBasis, nachher, trainingZuege, 1);
+    nachbetrachtung(trainingBasis, nachher);
     await aufWeiterWarten();
     await computerZug();
   }
@@ -2590,13 +2655,55 @@ let trainingVorher = null, trainingId = null, trainingLog = [];
 let vorschau = null, vorschauAktiv = false;
 const VORSCHAU_FARBEN = ["#2E8B3E", "#F4DD6B", "#C99A12"];
 
+let offenesTraining = null;
+
+async function trainingSuchen(){
+  const knopf = $("weiterTraining");
+  offenesTraining = null;
+  try {
+    const r = await withTimeout(db.from("trainings").select("*")
+      .eq("device", deviceId).eq("status", "laufend")
+      .order("updated_at", { ascending: false }).limit(1));
+    if (!r.error && r.data && r.data[0] && r.data[0].state) offenesTraining = r.data[0];
+  } catch (e) {}
+  if (!knopf) return;
+  knopf.classList.toggle("hidden", !offenesTraining);
+  if (offenesTraining){
+    const n = (offenesTraining.zuege || []).filter(z => z.wer === "du").length;
+    const typ = (PROFILE[offenesTraining.profil] || PROFILE.ausgewogen).name;
+    knopf.textContent = `Training fortsetzen — gegen ${typ}, ${n} ${n === 1 ? "Zug" : "Züge"} gespielt`;
+  }
+}
+
+function trainingFortsetzen(){
+  const t = offenesTraining;
+  if (!t) return;
+  trainingProfil = t.profil || "ausgewogen";
+  trainingId = t.id;
+  trainingLog = Array.isArray(t.zuege) ? t.zuege : [];
+  trainingNr = trainingLog.length;
+  trainingVorher = null; vorschau = null; vorschauAktiv = false; weiterFreigabe = null;
+  $("nachInhalt").innerHTML = "";
+  const g = { id: "training", p1: "du", p2: "cpu", status: "laufend", training: true, state: t.state };
+  spielOeffnen(g, { frage: false });
+  // War der Computer dran, als geschlossen wurde, zieht er jetzt
+  if (stand && stand.phase === "spiel" && !stand.gewinner && stand.turn === 2){
+    setTimeout(() => computerZug(), 600);          // mit gespeichertem Wurf, falls schon gewürfelt
+  }
+}
+
 async function trainingAnlegen(){
-  trainingId = null; trainingLog = [];
+  if (offenesTraining){                        // altes offenes Training gilt als abgebrochen
+    try { await withTimeout(db.from("trainings").update({ status: "abgebrochen" }).eq("id", offenesTraining.id)); } catch (e) {}
+    offenesTraining = null;
+  }
+  trainingId = null; trainingLog = []; trainingNr = 0;
   try {
     const r = await withTimeout(db.from("trainings")
       .insert({ profil: trainingProfil, spieler: ich() || null, device: deviceId, state: stand }).select());
     if (!r.error && r.data && r.data[0]) trainingId = r.data[0].id;
   } catch (e) { /* ohne Tabelle läuft das Training trotzdem */ }
+  $("weiterTraining").classList.add("hidden");
 }
 
 async function trainingSichern(fertig){
@@ -2623,6 +2730,7 @@ async function trainingEroeffnung(){
   stand = eroeffnungWuerfeln(stand, 2, 1 + Math.floor(Math.random() * 6));
   aktuellesSpiel.state = stand;
   brettZeichnen();
+  trainingSichern(false);
   if (stand.phase === "eroeffnung") return;              // gleich hoch: nochmal würfeln
   if (stand.turn === 1){ trainingVorher = klon(stand); return; }
   await pause(900);
@@ -2631,10 +2739,11 @@ async function trainingEroeffnung(){
 
 async function computerZug(nachEroeffnung){
   if (!aktuellesSpiel || !aktuellesSpiel.training || stand.gewinner || stand.turn !== 2) return;
-  if (!nachEroeffnung){
+  if (!nachEroeffnung && !stand.wurf.length){
     await pause(650);
     stand = wuerfeln(stand);
     brettZeichnen();
+    trainingSichern(false);                         // Wurf steht fest, auch wenn jetzt geschlossen wird
     await pause(800);
   }
   const basis = stand;
@@ -2642,6 +2751,7 @@ async function computerZug(nachEroeffnung){
   const folge = k.length ? k[0].zuege : [];
   trainingLog.push({ wer: "computer", zeit: new Date().toISOString(), wurf: basis.wurf.slice(),
                      zug: zugText(basis, folge), auswahl: k.length, profil: trainingProfil });
+  trainingZugSchreiben(basis, k.length ? k[0].stand : basis, folge, 2, { computer: trainingProfil });
   for (const z of folge){
     if (!aktuellesSpiel || !aktuellesSpiel.training) return;   // Training verlassen
     stand = anwenden(stand, z);
@@ -2651,6 +2761,7 @@ async function computerZug(nachEroeffnung){
   }
   if (!folge.length){ await pause(700); }
   stand = zugBeenden(stand);
+  stand.zug = null;
   aktuellesSpiel.state = stand;
   brettZeichnen();
   trainingSichern(false);
@@ -2744,6 +2855,7 @@ async function spielOeffnen(g, { frage = true, ausVerlauf = false } = {}){
   }
   aktuellesSpiel = g;
   stand = g.state; verlauf = []; zugListe = []; gewaehlt = null;
+  verlaufWiederherstellen();
   zeigeAnsicht("boardView", ausVerlauf, g.id);
   $("nachPanel").classList.add("hidden");
   $("weiterBtn").classList.add("hidden");
@@ -2969,7 +3081,7 @@ function zeigeAnsicht(name, ausVerlauf, spielId){
     if (aktuellesSpiel && aktuellesSpiel.training) aktuellesSpiel = null;
   }
   if (name === "statsView") renderStats();
-  if (name === "gamesView") renderGames();
+  if (name === "gamesView"){ renderGames(); trainingSuchen(); }
   window.scrollTo(0, 0);
 }
 
@@ -3049,7 +3161,8 @@ $("rollBtn").onclick = async () => {
     };
   } catch (e) { stand.zugInfo = null; }
   verlauf = []; zugListe = [];
-  if (aktuellesSpiel.training) trainingVorher = klon(stand);
+  stand.zug = null;
+  if (aktuellesSpiel.training){ trainingVorher = klon(stand); trainingSichern(false); }
   brettZeichnen();
   await spielSpeichern(false);
 };
@@ -3066,9 +3179,13 @@ $("undoBtn").onclick = async () => {
   gewaehlt = null;
   brettZeichnen();
   await spielSpeichern(false);
+  if (aktuellesSpiel && aktuellesSpiel.training) trainingSichern(false);
 };
 $("endBtn").onclick = zugAbschliessen;
 $("startTraining").onclick = trainingStarten;
+$("weiterTraining").onclick = trainingFortsetzen;
+$("statMode").onchange = zeichneChart;
+$("actWho").onchange = zeichneAktivitaet;
 $("letzterBtn").onclick = () => {
   const lz = stand && stand.letzterZug;
   if (!lz) return;
