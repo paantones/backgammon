@@ -290,7 +290,8 @@ ul.log li.edit .btn{width:auto;padding:9px 16px}
             <option value="anker">Ankerspieler*in — wartet hinten</option>
           </select>
         </div>
-        <button class="btn hidden" id="weiterTraining" style="margin-bottom:10px"></button>
+        <button class="btn hidden" id="weiterTraining" style="margin-bottom:6px"></button>
+        <button class="ghost hidden" id="verwerfenTraining" style="width:100%;margin-bottom:12px;padding:9px">offenes Training verwerfen</button>
         <button class="btn" id="startTraining">Neues Training starten</button>
         <p class="note">Zählt nicht für die Liga. Nach jedem deiner Züge zeigt die Nachbetrachtung, was die Maschine gespielt hätte.</p>
       </div>
@@ -322,6 +323,8 @@ ul.log li.edit .btn{width:auto;padding:9px 16px}
           <select id="pushWer"></select>
         </div>
         <button class="btn hidden" id="pushAn">Benachrichtigungen einschalten</button>
+        <button class="btn hidden" id="pushTest" style="margin-top:4px">Testnachricht an mich schicken</button>
+        <p class="note hidden" id="pushTestText" style="margin:10px 0 0"></p>
         <button class="ghost hidden" id="pushAus" style="width:100%;margin-top:8px;padding:10px">ausschalten</button>
       </div>
 
@@ -492,7 +495,10 @@ const deviceId = (() => {
       localStorage.setItem("bgl-device", id);
     }
     return id;
-  } catch (e) { return "unbekannt"; }
+  } catch (e) {
+    // Kein Speicher verfügbar: eigene Kennung nur für diese Sitzung, niemals eine gemeinsame
+    return "sitzung-" + (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random());
+  }
 })();
 let editingId = null;
 
@@ -549,7 +555,7 @@ $("gateBtn").onclick = () => {
   else $("gateErr").classList.remove("hidden");
 };
 $("pw").onkeydown = (e) => { if (e.key === "Enter") $("gateBtn").click(); };
-try { if (localStorage.getItem("bgl-pw") === PASSWORT) unlock(); } catch(e){}
+// (automatisches Entsperren steht ganz am Ende, wenn der ganze Code bereit ist)
 
 // --- Elo ---
 const expected = (a,b) => 1 / (1 + Math.pow(10, (b-a)/400));
@@ -1114,7 +1120,15 @@ function renderSpy(){
   box.querySelectorAll("[data-who]").forEach(el => el.textContent = nameOf(el.dataset.who));
 }
 
-function refresh(){ replay(); render(); renderAlt(); renderH2H(); renderSpy(); renderStats(); }
+function refresh(){
+  replay(); render(); renderAlt(); renderH2H(); renderSpy(); renderStats();
+  // Zuordnung des Geräts hängt an den Liga-Daten: davon abhängige Ansichten nachziehen
+  try {
+    dranZaehlen();
+    if (!$("gamesView").classList.contains("hidden")){ renderGames(); pushAnzeigen(); trainingSuchen(); }
+    if (!$("boardView").classList.contains("hidden") && stand) brettZeichnen();
+  } catch (e) {}
+}
 
 function renderH2H(){
   const box = $("h2h");
@@ -2702,7 +2716,11 @@ const pushMoeglich = () => "serviceWorker" in navigator && "PushManager" in wind
 async function pushAnzeigen(){
   const text = $("pushText"), an = $("pushAn"), aus = $("pushAus"), feld = $("pushWerFeld");
   if (!text) return;
-  const zeig = (t, f, a, b) => { text.textContent = t; feld.classList.toggle("hidden", !f); an.classList.toggle("hidden", !a); aus.classList.toggle("hidden", !b); };
+  const zeig = (t, f, a, b) => {
+    text.textContent = t; feld.classList.toggle("hidden", !f); an.classList.toggle("hidden", !a); aus.classList.toggle("hidden", !b);
+    $("pushTest").classList.toggle("hidden", !b);
+    if (!b) $("pushTestText").classList.add("hidden");
+  };
 
   if (!pushMoeglich()){
     if (istIOS() && !vomStartbildschirm())
@@ -2768,6 +2786,37 @@ async function pushAusschalten(){
   await pushAnzeigen();
 }
 
+// Testnachricht an sich selbst — mit verständlicher Rückmeldung
+async function pushTesten(){
+  const aus = $("pushTestText");
+  const melde = (t) => { aus.textContent = t; aus.classList.remove("hidden"); };
+  const wer = (() => { try { return localStorage.getItem("bgl-push-spieler"); } catch (e) { return null; } })();
+  if (!wer) return melde("Unklar, für wen eingeschaltet ist — bitte einmal aus- und wieder einschalten.");
+  if (!db.functions) return melde("Diese App-Fassung kann keine Funktionen aufrufen.");
+  melde("Wird gesendet …");
+  try {
+    const { data, error } = await db.functions.invoke("benachrichtigen", {
+      body: { spieler: wer, titel: "Test", text: "Wenn du das liest, funktionieren die Benachrichtigungen." }
+    });
+    if (error){
+      const status = error.context && error.context.status;
+      let grund = "";
+      if (status === 401) grund = "Die Funktion lehnt ab. Meist ist bei ihr „Verify JWT“ noch eingeschaltet — in Supabase unter Edge Functions → benachrichtigen ausschalten.";
+      else if (status === 404) grund = "Die Funktion wurde nicht gefunden. Heißt sie in Supabase genau „benachrichtigen“?";
+      else if (status === 500) grund = "Die Funktion ist abgestürzt — fehlt eines der drei VAPID-Geheimnisse?";
+      return melde(`Fehler${status ? " " + status : ""}. ${grund || (error.message || "")}`);
+    }
+    if (data && data.fehler) return melde("Die Funktion meldet: " + data.fehler);
+    if (data && data.gesendet > 0)
+      return melde(`Abgeschickt an ${data.gesendet} ${data.gesendet === 1 ? "Gerät" : "Geräte"}. Kommt in einer halben Minute nichts an, blockiert das Handy die Anzeige — dann in den Handy-Einstellungen bei der App bzw. dem Browser Benachrichtigungen erlauben.`);
+    if (data && data.fehler === 0 && data.entfernt > 0)
+      return melde("Das gespeicherte Abo war abgelaufen und wurde gelöscht. Bitte aus- und wieder einschalten.");
+    return melde(`Kein Gerät für ${nameOf(wer)} gefunden${data && data.fehler ? ` (${data.fehler} Zustellfehler)` : ""}. Bitte aus- und wieder einschalten.`);
+  } catch (e) {
+    melde("Keine Verbindung zur Funktion: " + (e && e.message || e));
+  }
+}
+
 // Nachricht an eine Person schicken (läuft über die Supabase-Funktion "benachrichtigen")
 function benachrichtigen(spielerId, titel, text, spielId){
   if (!spielerId || !db.functions) return;
@@ -2819,16 +2868,30 @@ async function trainingSuchen(){
   try {
     const r = await withTimeout(db.from("trainings").select("*")
       .eq("device", deviceId).eq("status", "laufend")
-      .order("updated_at", { ascending: false }).limit(1));
-    if (!r.error && r.data && r.data[0] && r.data[0].state) offenesTraining = r.data[0];
+      .order("updated_at", { ascending: false }).limit(5));
+    const mich = ich();
+    const passend = (r.data || []).filter(t => t.state && t.device === deviceId && (!mich || !t.spieler || t.spieler === mich));
+    if (!r.error && passend.length) offenesTraining = passend[0];
   } catch (e) {}
   if (!knopf) return;
   knopf.classList.toggle("hidden", !offenesTraining);
+  $("verwerfenTraining").classList.toggle("hidden", !offenesTraining);
   if (offenesTraining){
     const n = (offenesTraining.zuege || []).filter(z => z.wer === "du").length;
     const typ = (PROFILE[offenesTraining.profil] || PROFILE.ausgewogen).name;
-    knopf.textContent = `Training fortsetzen — gegen ${typ}, ${n} ${n === 1 ? "Zug" : "Züge"} gespielt`;
+    const d = new Date(offenesTraining.updated_at || offenesTraining.created_at);
+    const wann = d.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" }) + ", " + d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+    knopf.textContent = `Training fortsetzen — gegen ${typ}, ${n} ${n === 1 ? "Zug" : "Züge"}, zuletzt ${wann}`;
   }
+}
+
+// Alle offenen Trainings dieses Geräts beenden
+async function offeneTrainingsAbbrechen(){
+  try {
+    await withTimeout(db.from("trainings").update({ status: "abgebrochen", updated_at: new Date().toISOString() })
+      .eq("device", deviceId).eq("status", "laufend"));
+  } catch (e) {}
+  offenesTraining = null;
 }
 
 function trainingFortsetzen(){
@@ -2849,10 +2912,7 @@ function trainingFortsetzen(){
 }
 
 async function trainingAnlegen(){
-  if (offenesTraining){                        // altes offenes Training gilt als abgebrochen
-    try { await withTimeout(db.from("trainings").update({ status: "abgebrochen" }).eq("id", offenesTraining.id)); } catch (e) {}
-    offenesTraining = null;
-  }
+  await offeneTrainingsAbbrechen();            // alle alten offenen Trainings dieses Geräts gelten als abgebrochen
   trainingId = null; trainingLog = []; trainingNr = 0;
   try {
     const r = await withTimeout(db.from("trainings")
@@ -3339,7 +3399,15 @@ $("endBtn").onclick = zugAbschliessen;
 $("startTraining").onclick = trainingStarten;
 $("pushAn").onclick = pushEinschalten;
 $("pushAus").onclick = pushAusschalten;
+$("pushTest").onclick = pushTesten;
 $("weiterTraining").onclick = trainingFortsetzen;
+$("verwerfenTraining").onclick = async () => {
+  const ok = await dialog("Training verwerfen?", "Das offene Training wird beendet und nicht mehr angeboten. Die bisherigen Züge bleiben für die Statistik gespeichert.",
+    [{ text: "Ja, verwerfen", wert: true, art: "gefahr" }, { text: "Doch nicht", wert: false, art: "leise" }]);
+  if (!ok) return;
+  await offeneTrainingsAbbrechen();
+  await trainingSuchen();
+};
 $("statMode").onchange = zeichneChart;
 $("actWho").onchange = zeichneAktivitaet;
 $("letzterBtn").onclick = () => {
@@ -3376,6 +3444,9 @@ $("devLine").onclick = () => {
 };
 
 $("reload").onclick = () => { busy = false; load(); };
+
+// Erst jetzt ist aller Code eingelesen — gemerktes Passwort: direkt entsperren
+try { if (localStorage.getItem("bgl-pw") === PASSWORT) unlock(); } catch (e) { console.error("Entsperren:", e); }
 </script>
 <div class="dialog hidden" id="dialog" role="dialog" aria-modal="true" aria-labelledby="dlgTitel">
   <div class="dialogbox">
