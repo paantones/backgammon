@@ -2696,6 +2696,7 @@ function dialog(titel, text, knoepfe){
 }
 
 // ---------- Benachrichtigungen ----------
+const PUSH_FUNKTION = "super-worker";          // Name der Supabase-Funktion, wie er in ihrer Adresse steht
 const VAPID_OEFFENTLICH = "BImfmwtHida52mthilbJEt1VmPpQXwO7DdlP6A7uCw4U8BTUp1uKylSUTQysW8ur7bUzVcztEh2fZaYvxsGxO1M";
 let swReg = null;
 
@@ -2749,25 +2750,42 @@ async function pushAnzeigen(){
 
 async function pushEinschalten(){
   const wer = $("pushWer").value;
-  if (!wer){ $("pushText").textContent = "Bitte erst auswählen, wer du bist."; return; }
+  const melde = (t) => { $("pushText").textContent = t; };
+  if (!wer){ melde("Bitte erst auswählen, wer du bist."); return; }
+  melde("Wird eingeschaltet …");
   // Die Erlaubnis muss direkt aus dem Tippen heraus erfragt werden (vor allem auf dem iPhone)
   let erlaubnis = "default";
   try { erlaubnis = await Notification.requestPermission(); } catch (e) {}
-  if (erlaubnis !== "granted"){ await pushAnzeigen(); return; }
+  if (erlaubnis === "denied"){ await pushAnzeigen(); return; }
+  if (erlaubnis !== "granted"){
+    melde("Die Erlaubnis wurde nicht erteilt — das Nachfragefenster wurde wohl weggetippt. Einfach noch einmal versuchen und dann „Erlauben“ wählen.");
+    return;
+  }
   try {
     const reg = swReg || await swRegistrieren();
-    if (!reg) throw new Error("Hintergrunddienst ließ sich nicht starten.");
-    await navigator.serviceWorker.ready;
+    if (!reg) throw new Error("Der Hintergrunddienst ließ sich nicht starten.");
+    await withTimeout(navigator.serviceWorker.ready, 10000);
     let abo = await reg.pushManager.getSubscription();
-    if (!abo) abo = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: bytesAusBase64Url(VAPID_OEFFENTLICH) });
+    if (!abo){
+      try {
+        abo = await withTimeout(
+          reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: bytesAusBase64Url(VAPID_OEFFENTLICH) }), 20000);
+      } catch (e) {
+        const grund = /Zeitüberschreitung/.test(String(e && e.message || e)) ? "keine Antwort nach 20 Sekunden" : (e && e.message || e);
+        throw new Error("Der Browser konnte sich bei keinem Push-Dienst anmelden (" + grund + "). "
+          + "Bei Firefox-Varianten aus F-Droid wie Fennec braucht es dafür eine UnifiedPush-App, z. B. ntfy — "
+          + "oder du nutzt für BätsXherei einen anderen Browser.");
+      }
+    }
     const j = abo.toJSON();
     const r = await withTimeout(db.from("push_abos").upsert({
       endpoint: j.endpoint, spieler: wer, device: deviceId, abo: j, updated_at: new Date().toISOString()
     }));
-    if (r && r.error) throw new Error(r.error.message);
+    if (r && r.error) throw new Error("Speichern in der Datenbank fehlgeschlagen: " + r.error.message
+      + (/push_abos/.test(r.error.message) ? " — ist die Tabelle „push_abos“ angelegt?" : ""));
     try { localStorage.setItem("bgl-push-spieler", wer); } catch (e) {}
   } catch (e) {
-    $("pushText").textContent = "Einschalten hat nicht geklappt: " + (e && e.message || e);
+    melde("Einschalten hat nicht geklappt: " + (e && e.message || e));
     return;
   }
   await pushAnzeigen();
@@ -2795,15 +2813,17 @@ async function pushTesten(){
   if (!db.functions) return melde("Diese App-Fassung kann keine Funktionen aufrufen.");
   melde("Wird gesendet …");
   try {
-    const { data, error } = await db.functions.invoke("benachrichtigen", {
+    const { data, error } = await db.functions.invoke(PUSH_FUNKTION, {
       body: { spieler: wer, titel: "Test", text: "Wenn du das liest, funktionieren die Benachrichtigungen." }
     });
     if (error){
       const status = error.context && error.context.status;
       let grund = "";
-      if (status === 401) grund = "Die Funktion lehnt ab. Meist ist bei ihr „Verify JWT“ noch eingeschaltet — in Supabase unter Edge Functions → benachrichtigen ausschalten.";
-      else if (status === 404) grund = "Die Funktion wurde nicht gefunden. Heißt sie in Supabase genau „benachrichtigen“?";
+      if (status === 401) grund = "Die Funktion lehnt ab. Meist ist bei ihr „Verify JWT“ noch eingeschaltet — in Supabase unter Edge Functions bei der Funktion ausschalten.";
+      else if (status === 404) grund = "Die Funktion wurde nicht gefunden. Heißt sie in Supabase genau „" + PUSH_FUNKTION + "“?";
       else if (status === 500) grund = "Die Funktion ist abgestürzt — fehlt eines der drei VAPID-Geheimnisse?";
+      else if (!status) grund = "Die Funktion ist nicht erreichbar. Meist ist bei ihr „Verify JWT“ noch an, sie ist nicht veröffentlicht oder heißt nicht genau „" + PUSH_FUNKTION + "“. "
+        + "Zum Unterscheiden diese Adresse im Browser öffnen: " + SUPABASE_URL + "/functions/v1/" + PUSH_FUNKTION;
       return melde(`Fehler${status ? " " + status : ""}. ${grund || (error.message || "")}`);
     }
     if (data && data.fehler) return melde("Die Funktion meldet: " + data.fehler);
@@ -2821,7 +2841,7 @@ async function pushTesten(){
 function benachrichtigen(spielerId, titel, text, spielId){
   if (!spielerId || !db.functions) return;
   try {
-    db.functions.invoke("benachrichtigen", { body: { spieler: spielerId, titel, text, spiel: spielId || null } })
+    db.functions.invoke(PUSH_FUNKTION, { body: { spieler: spielerId, titel, text, spiel: spielId || null } })
       .catch(() => {});
   } catch (e) {}
 }
