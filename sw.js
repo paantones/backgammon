@@ -28,12 +28,13 @@ self.addEventListener("push", (e) => {
 self.addEventListener("notificationclick", (e) => {
   e.notification.close();
   const spiel = e.notification.data && e.notification.data.spiel;
-  const ziel = spiel ? "/#spiel=" + spiel : "/";
+  // Mit Partie: direkt aufs Brett. Ohne Partie (etwa Testnachricht): in den Spielen-Reiter.
+  const ziel = spiel ? "/#spiel=" + spiel : "/#spielen";
   e.waitUntil((async () => {
     const fenster = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
     for (const f of fenster){
       if ("focus" in f){
-        if (spiel) f.postMessage({ typ: "spiel", id: spiel });
+        f.postMessage(spiel ? { typ: "spiel", id: spiel } : { typ: "spielen" });
         return f.focus();
       }
     }

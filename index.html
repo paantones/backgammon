@@ -56,6 +56,11 @@ h1{font-family:'Fraunces',Georgia,serif;font-weight:800;font-size:clamp(30px,7vw
 #board{display:block;width:100%;height:auto;margin:4px 0 10px;touch-action:manipulation}
 .brettbox{position:relative}
 .zugleiste .btn{flex:1}
+@keyframes reinLinks{from{opacity:.3;transform:translateX(28px)}to{opacity:1;transform:none}}
+@keyframes reinRechts{from{opacity:.3;transform:translateX(-28px)}to{opacity:1;transform:none}}
+.rein-links{animation:reinLinks .2s ease-out}
+.rein-rechts{animation:reinRechts .2s ease-out}
+@media(prefers-reduced-motion:reduce){.rein-links,.rein-rechts{animation:none}}
 .nachkopf{font-family:'Fraunces',Georgia,serif;font-size:19px;margin:0 0 4px}
 .nachkopf.gut{color:#2F5D3A}
 .kandidat{border-top:1px solid var(--line)}
@@ -529,15 +534,16 @@ function unlock(){
   $("app").classList.remove("hidden");
   if (pushMoeglich()){
     swRegistrieren();
-    navigator.serviceWorker.addEventListener("message", (e) => {
+    navigator.serviceWorker.addEventListener("message", async (e) => {
       if (e.data && e.data.typ === "spiel") spielAusNachricht(e.data.id);
+      if (e.data && e.data.typ === "spielen"){ await spieleLaden(); zeigeAnsicht("gamesView"); }
     });
   }
   const sprung = (location.hash.match(/spiel=([^&]+)/) || [])[1];
-  if (sprung){
-    history.replaceState({ ansicht: "mainView" }, "", location.pathname);
-    setTimeout(() => spielAusNachricht(decodeURIComponent(sprung)), 1200);
-  }
+  const zumSpielen = /^#spielen\b/.test(location.hash);
+  if (sprung || zumSpielen) history.replaceState({ ansicht: "mainView" }, "", location.pathname);
+  if (sprung) setTimeout(() => spielAusNachricht(decodeURIComponent(sprung)), 700);
+  else if (zumSpielen) setTimeout(async () => { await spieleLaden(); zeigeAnsicht("gamesView"); }, 300);
   try { history.replaceState({ ansicht: "mainView" }, ""); } catch (e) {}
   try { localStorage.setItem("bgl-pw", PASSWORT); } catch(e){}
   $("stand").textContent = "verbinde …";
@@ -631,6 +637,7 @@ async function load(tries = 6){
     return;
   }
   players = pRes.data; matches = mRes.data;
+  ligaGeladen = true;
   refresh();
   $("stand").textContent = "Stand " + new Date().toLocaleTimeString("de-DE",{hour:"2-digit",minute:"2-digit"});
 }
@@ -1814,6 +1821,25 @@ function istDran(g){
   return st.turn === platz;
 }
 
+// Nachrichten zu Partien entfernen, in denen man nicht mehr dran ist —
+// auf Android hängt der Punkt am App-Symbol an diesen Nachrichten
+let ligaGeladen = false;
+
+async function veralteteNachrichtenSchliessen(){
+  try {
+    if (!ligaGeladen || !swReg || !swReg.getNotifications || !games.length) return;   // erst, wenn die Zuordnung steht
+    const offen = await swReg.getNotifications();
+    offen.forEach(nachricht => {
+      const m = /^spiel-(.+)$/.exec(nachricht.tag || "");
+      if (!m) return;
+      const g = games.find(x => x.id === m[1]);
+      if (!g || g.status !== "laufend"){ nachricht.close(); return; }
+      if (!meinPlatz(g)) return;                       // unklar, wer ich bin: lieber stehen lassen
+      if (!istDran(g)) nachricht.close();
+    });
+  } catch (e) {}
+}
+
 function dranZaehlen(){
   const n = games.filter(istDran).length;
   const el = $("dranZaehler");
@@ -1826,6 +1852,7 @@ function dranZaehlen(){
       if (n > 0) navigator.setAppBadge(n); else navigator.clearAppBadge();
     }
   } catch (e) { /* nicht überall vorhanden */ }
+  veralteteNachrichtenSchliessen();
   return n;
 }
 
@@ -3337,6 +3364,42 @@ document.querySelectorAll(".tab").forEach(b => {
     zeigeAnsicht(ziel);
   };
 });
+
+// Reiter per Wischen wechseln (nicht auf dem Spielbrett, nicht in Eingabefeldern, nicht am Bildschirmrand)
+(function wischen(){
+  const REIHE = ["mainView", "statsView", "gamesView"];
+  let start = null;
+  const aktuell = () => REIHE.find(v => !$(v).classList.contains("hidden"));
+  document.addEventListener("touchstart", (e) => {
+    const t = e.touches && e.touches[0];
+    if (!t || e.touches.length > 1){ start = null; return; }
+    const ziel = e.target;
+    const gesperrt = !aktuell()
+      || !$("dialog").classList.contains("hidden")
+      || (ziel.closest && ziel.closest("input, select, textarea, #board, .stattab, [data-kein-wischen]"));
+    const rand = t.clientX < 24 || t.clientX > window.innerWidth - 24;
+    start = (gesperrt || rand) ? null : { x: t.clientX, y: t.clientY, zeit: Date.now() };
+  }, { passive: true });
+  document.addEventListener("touchend", async (e) => {
+    if (!start) return;
+    const t = e.changedTouches && e.changedTouches[0];
+    const s = start; start = null;
+    if (!t) return;
+    const dx = t.clientX - s.x, dy = t.clientY - s.y;
+    if (Date.now() - s.zeit > 700) return;
+    if (Math.abs(dx) < 70 || Math.abs(dy) > Math.abs(dx) * 0.6) return;   // nur deutlich waagerecht
+    const jetzt = aktuell();
+    const i = REIHE.indexOf(jetzt) + (dx < 0 ? 1 : -1);
+    if (i < 0 || i >= REIHE.length) return;
+    const ziel = REIHE[i];
+    if (ziel === "gamesView") await spieleLaden();
+    zeigeAnsicht(ziel);
+    const el = $(ziel);
+    el.classList.remove("rein-links", "rein-rechts");
+    void el.offsetWidth;
+    el.classList.add(dx < 0 ? "rein-links" : "rein-rechts");
+  }, { passive: true });
+})();
 
 $("backFromBoard").onclick = async () => {
   if ((history.state || {}).ansicht === "boardView" && history.length > 1){ history.back(); return; }
