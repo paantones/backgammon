@@ -1761,27 +1761,79 @@ function merkmale(st, sp){
   };
 }
 
+// Wie viele eigene Steine stehen allein? Hinten im gegnerischen Heimfeld zählt nicht mit —
+// dort kostet ein getroffener Stein kaum etwas, und sonst liefe nie ein hinterer Stein los.
+function offeneSteine(st, sp){
+  let n = 0;
+  for (let i = 0; i < 24; i++){
+    const hinten = sp === 1 ? i >= 18 : i <= 5;
+    if (!hinten && (sp === 1 ? st.pts[i] === 1 : st.pts[i] === -1)) n++;
+  }
+  return n;
+}
+
+// Gibt es mit diesem Wurf eine erlaubte Zugfolge, nach der kein eigener Stein allein steht?
+function kannSauberZiehen(st){
+  const sp = st.turn;
+  let gefunden = false;
+  const gesehen = new Set();
+  (function dfs(s){
+    if (gefunden) return;
+    const z = s.gewinner ? [] : legaleZuege(s);
+    if (!z.length){ if (offeneSteine(s, sp) === 0 && s.bar[sp] === 0) gefunden = true; return; }
+    const k = standSchluessel(s) + "|" + s.off[1] + "," + s.off[2];
+    if (gesehen.has(k)) return;
+    gesehen.add(k);
+    for (const m of z){ dfs(anwenden(s, m)); if (gefunden) return; }
+  })(st);
+  return gefunden;
+}
+
+// Wahrscheinlichkeit, dass der nächste eigene Wurf ohne offene Steine aufgeht
+// (Zug der Gegenseite dazwischen bleibt außen vor)
+function aufgehChance(stNachZug, sp){
+  if (!hatKontakt(stNachZug)) return 1;          // im reinen Rennen sind offene Steine egal
+  const s0 = klon(stNachZug);
+  s0.turn = sp; s0.wurf = []; s0.rest = []; s0.gewinner = null;
+  let p = 0;
+  for (let a = 1; a <= 6; a++) for (let b = a; b <= 6; b++){
+    if (kannSauberZiehen(wuerfeln(s0, a, b))) p += (a === b ? 1 : 2) / 36;
+  }
+  return Math.min(1, p);
+}
+
 const PROFILE = {
-  ausgewogen: { name: "Ausgewogen",      pip: 1.0, risiko: -1.2, heim: 4, blockade: 5,  anker: 5,  hinten: -2,   gegnerBar: 14, raus: 2 },
-  rennen:     { name: "Rennspieler*in",  pip: 2.0, risiko: -0.4, heim: 1, blockade: 1,  anker: -4, hinten: -5,   gegnerBar: 5,  raus: 3 },
-  blockade:   { name: "Blockierer*in",   pip: 0.6, risiko: -0.9, heim: 5, blockade: 12, anker: 3,  hinten: -1,   gegnerBar: 10, raus: 2 },
-  angriff:    { name: "Angreifer*in",    pip: 0.6, risiko: -0.5, heim: 8, blockade: 4,  anker: 2,  hinten: -1.5, gegnerBar: 24, raus: 2 },
-  anker:      { name: "Ankerspieler*in", pip: 0.6, risiko: -1.6, heim: 3, blockade: 3,  anker: 16, hinten: 1,    gegnerBar: 10, raus: 2 },
+  ausgewogen: { name: "Ausgewogen",      pip: 1.0, risiko: -1.2, heim: 4, blockade: 5,  anker: 5,  hinten: -2,   gegnerBar: 14, raus: 2, aufgehen: 10 },
+  rennen:     { name: "Rennspieler*in",  pip: 2.0, risiko: -0.4, heim: 1, blockade: 1,  anker: -4, hinten: -5,   gegnerBar: 5,  raus: 3, aufgehen: 4 },
+  blockade:   { name: "Blockierer*in",   pip: 0.6, risiko: -0.9, heim: 5, blockade: 12, anker: 3,  hinten: -1,   gegnerBar: 10, raus: 2, aufgehen: 12 },
+  angriff:    { name: "Angreifer*in",    pip: 0.6, risiko: -0.5, heim: 8, blockade: 4,  anker: 2,  hinten: -1.5, gegnerBar: 24, raus: 2, aufgehen: 6 },
+  anker:      { name: "Ankerspieler*in", pip: 0.6, risiko: -1.6, heim: 3, blockade: 3,  anker: 16, hinten: 1,    gegnerBar: 10, raus: 2, aufgehen: 14 },
 };
 
 function bewerte(m, p){
   if (!m.kontakt) return m.pipVorsprung + m.raus * 1.5;      // reines Rennen
   return m.pipVorsprung * p.pip + m.risikoKosten * p.risiko + m.heimPunkte * p.heim
        + Math.max(0, m.blockade - 1) * p.blockade + m.anker * p.anker + m.hinten * p.hinten
-       + m.gegnerBar * p.gegnerBar + m.raus * p.raus;
+       + m.gegnerBar * p.gegnerBar + m.raus * p.raus
+       + (m.aufgehen === undefined ? 0 : (m.aufgehen - 1) * (p.aufgehen || 0));
 }
 
 // Alle Zugfolgen bewerten, beste zuerst
 function kandidaten(st, profilName){
   const sp = st.turn, p = PROFILE[profilName] || PROFILE.ausgewogen;
-  return zugfolgen(st)
+  const alle = zugfolgen(st)
     .map(k => { const m = merkmale(k.stand, sp); return { ...k, m, wert: bewerte(m, p) }; })
     .sort((a, b) => b.wert - a.wert);
+  // Stufe 2: Aufgeh-Chance des nächsten Wurfs — nur für Züge, die noch Chancen auf Platz eins haben
+  if (alle.length > 1 && (p.aufgehen || 0) > 0){
+    const grenze = alle[0].wert - p.aufgehen;
+    alle.filter((k, i) => i < 15 && k.wert >= grenze).forEach(k => {
+      k.m.aufgehen = aufgehChance(k.stand, sp);
+      k.wert = bewerte(k.m, p);
+    });
+    alle.sort((a, b) => b.wert - a.wert);
+  }
+  return alle;
 }
 
 function zugText(st, zuege){
@@ -3195,6 +3247,9 @@ function nachbetrachtung(vorher, nachher){
 
   const zeige = alle.slice(0, 3).map((k, i) => ({ k, rang: i + 1 }));
   if (meinIndex >= 3) zeige.push({ k: alle[meinIndex], rang: meinIndex + 1 });
+  zeige.forEach(({ k }) => {
+    if (k.m.aufgehen === undefined){ try { k.m.aufgehen = aufgehChance(k.stand, vorher.turn); } catch (e) {} }
+  });
 
   const zeile = ({ k, rang }) => {
     const deiner = rang - 1 === meinIndex;
@@ -3204,11 +3259,12 @@ function nachbetrachtung(vorher, nachher){
       <summary>
         ${rang <= 3 ? `<span class="rangstein r${rang} ${vorschauAktiv && vorschau && vorschau.fokus === rang - 1 ? "fokus" : ""}" data-fokus="${rang - 1}" title="auf dem Brett zeigen">${rang}</span>` : `<span class="rangstein rx">${rang}</span>`}
         <span><span class="zug">${zugText(vorher, k.zuege)}</span>${et ? `<span class="etikett">${et}</span>` : ""}${deiner ? `<span class="etikett" style="background:#8C3226">dein Zug</span>` : ""}</span>
-        <span class="kurz">Risiko ${prozent(m.risiko)}</span>
+        <span class="kurz">Risiko ${prozent(m.risiko)}<br>geht auf ${m.aufgehen === undefined ? "–" : prozent(m.aufgehen)}</span>
       </summary>
       <div class="detail">
         <span>Bewertung</span><span>${k.wert.toFixed(1).replace(".", ",")}</span>
         <span>Trefferrisiko im nächsten Wurf</span><span>${prozent(m.risiko)}</span>
+        <span>nächster eigener Wurf ohne offene Steine</span><span>${m.aufgehen === undefined ? "–" : prozent(m.aufgehen)}</span>
         <span>Augenvorsprung</span><span>${m.pipVorsprung > 0 ? "+" : ""}${m.pipVorsprung}</span>
         <span>Punkte im Heimfeld</span><span>${m.heimPunkte}</span>
         <span>längste Blockade</span><span>${m.blockade}</span>
@@ -3223,7 +3279,7 @@ function nachbetrachtung(vorher, nachher){
   vorschauAktiv = false;
   const knopf = `<button class="ghost vorschauknopf" id="vorschauBtn">Auf dem Brett zeigen</button>`;
   $("nachInhalt").innerHTML = kopf + knopf + zeige.map(zeile).join("")
-    + `<p class="note" style="margin-top:10px">Die Bewertung schaut einen Zug weit und wiegt Augen, Risiko, gebaute Punkte und Blockaden gegeneinander ab. Kein Profiprogramm — aber das Trefferrisiko ist exakt gerechnet.</p>`;
+    + `<p class="note" style="margin-top:10px">„Geht auf“: Wahrscheinlichkeit, dass dein nächster Wurf ohne offene Steine gespielt werden kann (Steine hinten im gegnerischen Heimfeld zählen nicht). Die Bewertung wiegt das mit Augen, Risiko, Punkten und Blockaden ab. Kein Profiprogramm — aber Risiko und Aufgehen sind exakt gerechnet.</p>`;
 }
 
 async function spielOeffnen(g, { frage = true, ausVerlauf = false } = {}){
