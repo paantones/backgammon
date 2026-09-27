@@ -47,6 +47,14 @@ h1{font-family:'Fraunces',Georgia,serif;font-weight:800;font-size:clamp(30px,7vw
   font-size:12px;letter-spacing:.12em;text-transform:uppercase;padding:14px 4px;cursor:pointer;
   border-bottom:3px solid transparent}
 .tab.aktiv{color:var(--pearl);background:var(--bark);border-bottom-color:var(--pearl)}
+@media(max-width:440px){.tab{font-size:11px;letter-spacing:.04em;padding:14px 2px}.zaehler{margin-left:4px}}
+.wuerfelbuehne{display:block;width:100%;max-width:420px;margin:6px auto 4px;cursor:pointer;touch-action:manipulation}
+.wurfansage{text-align:center;font-family:'Fraunces',Georgia,serif;font-size:22px;min-height:30px;margin:4px 0 14px}
+.wurfansage small{display:block;font-family:'IBM Plex Sans',sans-serif;font-size:13px;color:var(--ink-soft)}
+.wurfverlauf{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
+.wurfverlauf span{font-family:'IBM Plex Mono',monospace;font-size:12px;background:var(--field);border:1px solid var(--line);
+  border-radius:10px;padding:2px 8px;color:var(--ink-soft)}
+.wurfverlauf span.pasch{background:var(--horn);color:var(--pearl);border-color:var(--horn)}
 .zaehler{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;
   margin-left:7px;padding:0 5px;border-radius:9px;background:#C7332A;color:#fff;
   font-size:11px;font-weight:600;letter-spacing:0;vertical-align:middle}
@@ -235,6 +243,7 @@ ul.log li.edit .btn{width:auto;padding:9px 16px}
       <button class="tab aktiv" data-view="mainView">Liga</button>
       <button class="tab" data-view="statsView">Statistik</button>
       <button class="tab" data-view="gamesView">Spielen<span class="zaehler hidden" id="dranZaehler">0</span></button>
+      <button class="tab" data-view="diceView">Würfel</button>
     </nav>
     <div class="head">
       <div class="head-in">
@@ -383,6 +392,20 @@ ul.log li.edit .btn{width:auto;padding:9px 16px}
       <div class="bar">
         <span class="tag" id="boardStand">—</span>
         <button class="ghost" id="backFromBoard">Zurück zur Übersicht</button>
+      </div>
+    </div>
+
+    <div class="stack hidden" id="diceView">
+      <div class="panel">
+        <svg class="wuerfelbuehne" id="wuerfelFeld" viewBox="0 0 240 110" role="img" aria-label="Zwei Würfel — tippen zum Würfeln"></svg>
+        <p class="wurfansage" id="wurfAnsage" aria-live="polite">Tippen zum Würfeln</p>
+        <button class="btn" id="wurfBtn" style="padding:16px;font-size:18px">Würfeln</button>
+        <button class="ghost" id="eroeffnungBtn" style="width:100%;margin-top:10px;padding:11px">Eröffnungswurf — wer beginnt?</button>
+      </div>
+      <div class="panel">
+        <p class="eyebrow">Letzte Würfe</p>
+        <div class="wurfverlauf" id="wurfVerlauf"><p class="empty">Noch nicht gewürfelt.</p></div>
+        <p class="note">Gewürfelt wird mit dem Zufallsgenerator für Verschlüsselung — so zufällig, wie ein Handy es kann. Der Bildschirm bleibt an, solange dieser Reiter offen ist.</p>
       </div>
     </div>
 
@@ -2722,6 +2745,97 @@ function dialog(titel, text, knoepfe){
   });
 }
 
+// ---------- Würfel fürs echte Brett ----------
+let wuerfelJetzt = [null, null], wurfListe = [], wirdGewuerfelt = false, wachSperre = null;
+
+// Gleichverteilt 1–6 aus dem kryptografischen Zufall (ohne Verzerrung durch Modulo)
+function augenZufall(){
+  const b = new Uint8Array(1);
+  do { crypto.getRandomValues(b); } while (b[0] >= 252);
+  return 1 + (b[0] % 6);
+}
+
+function wuerfelZeichnen(beschriftung){
+  const svg = $("wuerfelFeld");
+  if (!svg) return;
+  const gr = 96;
+  let g = wuerfelBild(12, 7, gr, wuerfelJetzt[0], false) + wuerfelBild(132, 7, gr, wuerfelJetzt[1], false);
+  if (beschriftung){
+    g += `<text x="60" y="108" text-anchor="middle" font-family="ui-monospace,monospace" font-size="9" fill="#2A1D14">${beschriftung[0]}</text>`;
+    g += `<text x="180" y="108" text-anchor="middle" font-family="ui-monospace,monospace" font-size="9" fill="#2A1D14">${beschriftung[1]}</text>`;
+  }
+  svg.innerHTML = g;
+}
+
+function wurfVerlaufZeigen(){
+  const box = $("wurfVerlauf");
+  if (!wurfListe.length){ box.innerHTML = `<p class="empty">Noch nicht gewürfelt.</p>`; return; }
+  box.innerHTML = wurfListe.slice(0, 16).map(w =>
+    `<span class="${w[0] === w[1] ? "pasch" : ""}">${w[0]}–${w[1]}</span>`).join("");
+}
+
+async function rollenLassen(zielWerte, beschriftung){
+  const flink = !(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+  if (flink){
+    for (let i = 0; i < 7; i++){
+      wuerfelJetzt = [augenZufall(), augenZufall()];
+      wuerfelZeichnen(beschriftung);
+      await new Promise(r => setTimeout(r, 45 + i * 12));
+    }
+  }
+  wuerfelJetzt = zielWerte;
+  wuerfelZeichnen(beschriftung);
+  try { if (navigator.vibrate) navigator.vibrate(25); } catch (e) {}
+}
+
+async function normalWuerfeln(){
+  if (wirdGewuerfelt) return;
+  wirdGewuerfelt = true;
+  const w = [augenZufall(), augenZufall()];
+  $("wurfAnsage").textContent = " ";
+  await rollenLassen(w);
+  wurfListe.unshift(w);
+  $("wurfAnsage").innerHTML = w[0] === w[1]
+    ? `Pasch! ${w[0]} und ${w[1]}<small>Vier Züge à ${w[0]}</small>`
+    : `${w[0]} und ${w[1]}<small>${w[0] + w[1]} Augen</small>`;
+  wurfVerlaufZeigen();
+  wirdGewuerfelt = false;
+}
+
+async function eroeffnungWuerfelnEcht(){
+  if (wirdGewuerfelt) return;
+  wirdGewuerfelt = true;
+  let hell, dunkel, runden = 0;
+  do {
+    hell = augenZufall(); dunkel = augenZufall(); runden++;
+    await rollenLassen([hell, dunkel], ["HELL", "DUNKEL"]);
+    if (hell === dunkel){
+      $("wurfAnsage").innerHTML = `Gleich hoch (${hell})<small>Nochmal …</small>`;
+      await new Promise(r => setTimeout(r, 900));
+    }
+  } while (hell === dunkel && runden < 20);
+  const wer = hell > dunkel ? "Hell" : "Dunkel";
+  $("wurfAnsage").innerHTML = `${wer} beginnt<small>und zieht ${Math.max(hell, dunkel)} und ${Math.min(hell, dunkel)}</small>`;
+  wurfListe.unshift([hell, dunkel]);
+  wurfVerlaufZeigen();
+  wirdGewuerfelt = false;
+}
+
+// Bildschirm anlassen, solange der Würfel-Reiter offen ist
+async function wachHalten(an){
+  try {
+    if (an && !wachSperre && navigator.wakeLock){
+      wachSperre = await navigator.wakeLock.request("screen");
+      wachSperre.addEventListener("release", () => { wachSperre = null; });
+    } else if (!an && wachSperre){
+      await wachSperre.release(); wachSperre = null;
+    }
+  } catch (e) { wachSperre = null; }
+}
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden && !$("diceView").classList.contains("hidden")) wachHalten(true);
+});
+
 // ---------- Benachrichtigungen ----------
 const PUSH_FUNKTION = "super-worker";          // Name der Supabase-Funktion, wie er in ihrer Adresse steht
 const VAPID_OEFFENTLICH = "BImfmwtHida52mthilbJEt1VmPpQXwO7DdlP6A7uCw4U8BTUp1uKylSUTQysW8ur7bUzVcztEh2fZaYvxsGxO1M";
@@ -3333,7 +3447,7 @@ function zeigeAnsicht(name, ausVerlauf, spielId){
     const gleich = jetzt.ansicht === name && (name !== "boardView" || jetzt.spiel === spielId);
     if (!gleich) history.pushState({ ansicht: name, spiel: spielId || null }, "");
   }
-  ["mainView","statsView","gamesView","boardView"].forEach(v => {
+  ["mainView","statsView","gamesView","boardView","diceView"].forEach(v => {
     const el = $(v);
     if (el) el.classList.toggle("hidden", v !== name);
   });
@@ -3343,6 +3457,7 @@ function zeigeAnsicht(name, ausVerlauf, spielId){
     statsView: ["– Statistik", "Wer wann vorn lag und warum"],
     gamesView: ["– Spielen",   "Gegeneinander oder gegen den Computer"],
     boardView: ["– Spielen",   aktuellesSpiel && aktuellesSpiel.training ? "Training" : "Partie"],
+    diceView:  ["– Würfel",    "Fürs echte Brett"],
   };
   const [bereich, zeile] = KOPF[name] || KOPF.mainView;
   $("kopfBereich").textContent = bereich;
@@ -3353,6 +3468,8 @@ function zeigeAnsicht(name, ausVerlauf, spielId){
     if (aktuellesSpiel && aktuellesSpiel.training) aktuellesSpiel = null;
   }
   if (name === "statsView") renderStats();
+  wachHalten(name === "diceView");
+  if (name === "diceView") wuerfelZeichnen();
   if (name === "gamesView"){ renderGames(); trainingSuchen(); pushAnzeigen(); }
   window.scrollTo(0, 0);
 }
@@ -3367,7 +3484,7 @@ document.querySelectorAll(".tab").forEach(b => {
 
 // Reiter per Wischen wechseln (nicht auf dem Spielbrett, nicht in Eingabefeldern, nicht am Bildschirmrand)
 (function wischen(){
-  const REIHE = ["mainView", "statsView", "gamesView"];
+  const REIHE = ["mainView", "statsView", "gamesView", "diceView"];
   let start = null;
   const aktuell = () => REIHE.find(v => !$(v).classList.contains("hidden"));
   document.addEventListener("touchstart", (e) => {
@@ -3480,6 +3597,9 @@ $("undoBtn").onclick = async () => {
 };
 $("endBtn").onclick = zugAbschliessen;
 $("startTraining").onclick = trainingStarten;
+$("wurfBtn").onclick = normalWuerfeln;
+$("wuerfelFeld").addEventListener("click", normalWuerfeln);
+$("eroeffnungBtn").onclick = eroeffnungWuerfelnEcht;
 $("pushAn").onclick = pushEinschalten;
 $("pushAus").onclick = pushAusschalten;
 $("pushTest").onclick = pushTesten;
