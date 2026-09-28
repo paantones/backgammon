@@ -1850,6 +1850,16 @@ function zugText(st, zuege){
 
 // --- Spielbetrieb ---
 let games = [], aktuellesSpiel = null, stand = null, gewaehlt = null, verlauf = [], zugListe = [], kanal = null;
+// Jeder gespeicherte Spielstand trägt eine fortlaufende Nummer (v). Übernommen wird nur, was neuer ist —
+// so können verspätete Meldungen und Echos den Stand nicht mehr zurückdrehen.
+let versionGesehen = 0;
+const versionVon = (st) => (st && typeof st.v === "number") ? st.v : null;
+function istVeraltet(neu){
+  const v = versionVon(neu);
+  if (v === null) return false;            // Stand von einer älteren App-Fassung: wie bisher behandeln
+  return v <= versionGesehen;
+}
+function versionMerken(st){ const v = versionVon(st); if (v !== null && v > versionGesehen) versionGesehen = v; }
 
 const sitzGespeichert = (gid) => {
   try {
@@ -2255,6 +2265,8 @@ function brettStatus(){
 
 async function spielSpeichern(fertig){
   if (!aktuellesSpiel) return;
+  versionGesehen = Math.max(versionGesehen, versionVon(stand) || 0) + 1;
+  stand.v = versionGesehen;
   if (aktuellesSpiel.training){
     aktuellesSpiel.state = stand;
     if (fertig) aktuellesSpiel.status = "fertig";
@@ -2492,10 +2504,12 @@ function eigenerZugLaeuft(fremderZug){
 
 function standUebernehmen(frisch){
   if (!frisch || !aktuellesSpiel || frisch.id !== aktuellesSpiel.id) return;
+  if (istVeraltet(frisch.state)) return;
   if (JSON.stringify(frisch.state) === JSON.stringify(stand) && frisch.status === aktuellesSpiel.status) return;
   if (eigenerZugLaeuft(frisch.state && frisch.state.turn)) return;
   aktuellesSpiel = frisch;
   stand = frisch.state;
+  versionMerken(stand);
   verlauf = []; zugListe = []; gewaehlt = null;
   if (vorschau && vorschau.art === "letzter"){ vorschauAktiv = false; vorschau = null; }
   brettZeichnen();
@@ -3290,6 +3304,7 @@ async function spielOeffnen(g, { frage = true, ausVerlauf = false } = {}){
   }
   aktuellesSpiel = g;
   stand = g.state; verlauf = []; zugListe = []; gewaehlt = null;
+  versionGesehen = versionVon(g.state) || 0;
   verlaufWiederherstellen();
   zeigeAnsicht("boardView", ausVerlauf, g.id);
   $("nachPanel").classList.add("hidden");
@@ -3314,7 +3329,7 @@ function sitzFragen(g){
 async function frischerStand(){
   try {
     const r = await withTimeout(db.from("games").select("*").eq("id", aktuellesSpiel.id));
-    if (!r.error && r.data && r.data[0]) return r.data[0].state;
+    if (!r.error && r.data && r.data[0]){ versionMerken(r.data[0].state); return r.data[0].state; }
   } catch (e) {}
   return null;
 }
@@ -3358,9 +3373,10 @@ async function abgleichen(){
     if (!r.error && r.data && r.data[0]){
       const frisch = r.data[0];
       const anders = JSON.stringify(frisch.state) !== JSON.stringify(stand) || frisch.status !== aktuellesSpiel.status;
-      if (anders && !eigenerZugLaeuft(frisch.state && frisch.state.turn)){
+      if (anders && !istVeraltet(frisch.state) && !eigenerZugLaeuft(frisch.state && frisch.state.turn)){
         aktuellesSpiel = frisch;
         stand = frisch.state;
+        versionMerken(stand);
         verlauf = []; zugListe = [];
         gewaehlt = null;
         brettZeichnen();
