@@ -2,6 +2,23 @@
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (e) => e.waitUntil(self.clients.claim()));
 
+// Sichtbare App-Fenster fragen, welche Partie sie gerade zeigen (Antwort binnen 400 ms, sonst "keine")
+async function zeigtGerade(spiel){
+  const fenster = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+  for (const f of fenster){
+    if (f.visibilityState !== "visible") continue;
+    const antwort = await new Promise((fertig) => {
+      const kanal = new MessageChannel();
+      const uhr = setTimeout(() => fertig(null), 400);
+      kanal.port1.onmessage = (ev) => { clearTimeout(uhr); fertig(ev.data); };
+      try { f.postMessage({ typ: "welchePartie" }, [kanal.port2]); }
+      catch (_) { clearTimeout(uhr); fertig(null); }
+    });
+    if (antwort && antwort.spiel === spiel) return true;
+  }
+  return false;
+}
+
 self.addEventListener("push", (e) => {
   let d = {};
   try { d = e.data ? e.data.json() : {}; } catch (_) { d = { titel: "BätsXherei", text: e.data ? e.data.text() : "" }; }
@@ -13,11 +30,7 @@ self.addEventListener("push", (e) => {
 
   // Ist genau diese Partie gerade sichtbar geöffnet? Dann keine Benachrichtigung.
   const anzeigen = (async () => {
-    if (spiel){
-      const fenster = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
-      const offen = fenster.some(f => f.visibilityState === "visible" && (f.url || "").includes("partie=" + spiel));
-      if (offen) return;
-    }
+    if (spiel && await zeigtGerade(spiel)) return;
     return self.registration.showNotification(d.titel || "BätsXherei", {
     body: d.text || "",
     icon: "/icon-192.png",

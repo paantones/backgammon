@@ -134,11 +134,18 @@ h1{font-family:'Fraunces',Georgia,serif;font-weight:800;font-size:clamp(30px,7vw
 .blase-bahn.von-rechts{animation-name:treibenLinks}
 @keyframes treibenRechts{0%{transform:translateX(-2%);opacity:0}8%{opacity:1}90%{opacity:1}100%{transform:translateX(52%);opacity:0}}
 @keyframes treibenLinks{0%{transform:translateX(52%);opacity:0}8%{opacity:1}90%{opacity:1}100%{transform:translateX(-2%);opacity:0}}
-.blase-bahn > .blase{position:absolute;left:4%;max-width:46%;background:var(--pearl);color:var(--ink);
+.blase-bahn > .blase{position:absolute;left:4%;max-width:46%;
   border:1px solid #7A5231;border-radius:14px;padding:7px 12px;font-size:14px;
   font-family:'Fraunces',Georgia,serif;box-shadow:0 3px 10px rgba(0,0,0,.28);
   animation:wackeln 3.4s ease-in-out infinite}
-.blase-bahn > .blase.unten{background:var(--horn);color:var(--pearl);border-color:#2A1D14}
+.blase-bahn > .blase.hell{background:var(--ivory);color:var(--ink);border-color:#7A5231}
+.blase-bahn > .blase.dunkel{background:var(--horn);color:var(--pearl);border-color:#0E0A08}
+.blase-bahn > .blase.zuschauer{background:#8A6039;color:var(--pearl);border-color:#5E4128}
+/* Zipfel: ein gedrehtes Quadrat in Blasenfarbe, zwei Kanten mit Rahmen */
+.blase-bahn > .blase::after{content:"";position:absolute;width:12px;height:12px;background:inherit;
+  border:inherit;transform:rotate(45deg);box-sizing:border-box}
+.blase-bahn > .blase.zipfel-oben::after{top:-7px;left:18px;border-right:none;border-bottom:none;border-radius:2px 0 0 0}
+.blase-bahn > .blase.zipfel-unten::after{bottom:-7px;right:18px;border-left:none;border-top:none;border-radius:0 0 2px 0}
 .blase-bahn > .blase small{display:block;font-family:'IBM Plex Mono',monospace;font-size:10px;opacity:.7;margin-bottom:2px}
 @keyframes wackeln{
   0%  {transform:translate(0,0) rotate(-2deg)}
@@ -570,6 +577,12 @@ function unlock(){
   if (pushMoeglich()){
     swRegistrieren();
     navigator.serviceWorker.addEventListener("message", async (e) => {
+      if (e.data && e.data.typ === "welchePartie" && e.ports && e.ports[0]){
+        const brettOffen = !$("boardView").classList.contains("hidden") && !document.hidden;
+        const id = brettOffen && aktuellesSpiel && !aktuellesSpiel.training ? aktuellesSpiel.id : null;
+        e.ports[0].postMessage({ spiel: id });
+        return;
+      }
       if (e.data && e.data.typ === "spiel") spielAusNachricht(e.data.id);
       if (e.data && e.data.typ === "spielen"){ await spieleLaden(); zeigeAnsicht("gamesView"); }
     });
@@ -2204,8 +2217,8 @@ function brettStatus(){
   $("boardTitel").textContent = `${namen[1]} (hell) gegen ${namen[2]} (dunkel)`;
 
   const zuschauer = !meinSitz;
-  $("chatEingabe").classList.toggle("hidden", zuschauer);
-  $("schnell").classList.toggle("hidden", zuschauer);
+  $("chatEingabe").classList.remove("hidden");
+  $("schnell").classList.remove("hidden");
 
   if (zuschauer && !stand.gewinner){
     zeig("rollBtn", false); zeig("endBtn", false); zeig("undoBtn", false);
@@ -2214,7 +2227,7 @@ function brettStatus(){
     } else {
       $("boardStatus").textContent = `${namen[stand.turn]} ist dran`;
     }
-    $("boardHinweis").textContent = "Du schaust zu. Züge erscheinen live.";
+    $("boardHinweis").textContent = "Du schaust zu. Züge erscheinen live — mitreden darfst du trotzdem.";
     return;
   }
 
@@ -2414,6 +2427,7 @@ let chatZeilen = [], gezeigt = new Set(), blasen = [];
 
 function chatName(sitzNr){
   if (!aktuellesSpiel) return "";
+  if (sitzNr !== 1 && sitzNr !== 2) return "Zuschauer*in";
   return nameOf(sitzNr === 1 ? aktuellesSpiel.p1 : aktuellesSpiel.p2);
 }
 
@@ -2456,19 +2470,19 @@ function renderBlasen(){
 function blaseEinfuegen(b){
   const box = $("blasen");
   if (!box) return;
-  const meinSitz = aktuellesSpiel ? sitz(aktuellesSpiel.id) : 0;
-  const eigen = b.sitz === meinSitz;
-  // Bahn wählen: freie Höhe auf der eigenen bzw. gegnerischen Brettseite
-  const belegt = blasen.filter(x => x.id !== b.id && x.eigen === eigen).map(x => x.bahn);
+  // Farbe: wer spricht. Seite: wo das Heimfeld dieser Farbe aus Sicht des Geräts liegt.
+  const farbe = b.sitz === 1 ? "hell" : b.sitz === 2 ? "dunkel" : "zuschauer";
+  const seite = b.sitz === 1 || b.sitz === 2 ? (((b.sitz === 1) !== gedreht()) ? "unten" : "oben") : "mitte";
+  const belegt = blasen.filter(x => x.id !== b.id && x.seite === seite).map(x => x.bahn);
   let bahn = 0; while (belegt.includes(bahn) && bahn < 3) bahn++;
-  b.eigen = eigen; b.bahn = bahn;
+  b.seite = seite; b.bahn = bahn;
 
   const aussen = document.createElement("div");
-  aussen.className = "blase-bahn " + (eigen ? "von-rechts" : "von-links");
-  aussen.style.top = (eigen ? 58 + bahn * 11 : 6 + bahn * 11) + "%";
+  aussen.className = "blase-bahn " + (seite === "unten" ? "von-rechts" : "von-links");
+  aussen.style.top = (seite === "oben" ? 6 + bahn * 11 : seite === "unten" ? 58 + bahn * 11 : 34 + bahn * 8) + "%";
   aussen.dataset.id = b.id;
   const blase = document.createElement("div");
-  blase.className = "blase " + (eigen ? "unten" : "oben");
+  blase.className = "blase " + farbe + " " + (seite === "oben" ? "zipfel-oben" : "zipfel-unten");
   blase.style.animationDelay = (-Math.random() * 3).toFixed(2) + "s";
   const wer = document.createElement("small");
   wer.textContent = chatName(b.sitz);
@@ -2516,7 +2530,7 @@ async function chatLaden(gid){
 
 async function chatSenden(text, schnell){
   if (!aktuellesSpiel || !text.trim()) return;
-  const meinSitz = sitz(aktuellesSpiel.id) || meinPlatz(aktuellesSpiel) || 1;
+  const meinSitz = sitz(aktuellesSpiel.id) || 0;                 // 0 = Zuschauer*in
   const zeile = { game: aktuellesSpiel.id, sitz: meinSitz, text: text.trim().slice(0, 200), schnell: !!schnell };
   {
     const b = { id: "eigen" + Date.now(), sitz: meinSitz, text: zeile.text, zeit: Date.now() };
@@ -2532,7 +2546,12 @@ async function chatSenden(text, schnell){
   } catch (e) { /* stumm */ }
   if (!aktuellesSpiel.training){
     const g = aktuellesSpiel;
-    benachrichtigen(gegnerVon(g, meinSitz), `Nachricht von ${nameOf(spielerVon(g, meinSitz))}`, zeile.text, "chat:" + g.id);
+    if (meinSitz === 1 || meinSitz === 2){
+      benachrichtigen(gegnerVon(g, meinSitz), `Nachricht von ${nameOf(spielerVon(g, meinSitz))}`, zeile.text, "chat:" + g.id);
+    } else {
+      const wer = ich() ? `${nameOf(ich())} (schaut zu)` : "Zuschauer*in";
+      [g.p1, g.p2].forEach(id => benachrichtigen(id, `Nachricht von ${wer}`, zeile.text, "chat:" + g.id));
+    }
   }
 }
 
@@ -3563,8 +3582,7 @@ function zeigeAnsicht(name, ausVerlauf, spielId){
   if (!ausVerlauf){
     const jetzt = history.state || {};
     const gleich = jetzt.ansicht === name && (name !== "boardView" || jetzt.spiel === spielId);
-    if (!gleich) history.pushState({ ansicht: name, spiel: spielId || null }, "",
-      name === "boardView" && spielId && spielId !== "training" ? "#partie=" + spielId : location.pathname);
+    if (!gleich) history.pushState({ ansicht: name, spiel: spielId || null }, "");
   }
   ["mainView","statsView","gamesView","boardView","diceView"].forEach(v => {
     const el = $(v);
