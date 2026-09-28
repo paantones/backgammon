@@ -129,12 +129,24 @@ h1{font-family:'Fraunces',Georgia,serif;font-weight:800;font-size:clamp(30px,7vw
 .stattab > span.z.besser{color:#8C3226}
 .zugleiste .ghost{flex:none}
 #blasen{position:absolute;inset:0;pointer-events:none}
-.blase{position:absolute;max-width:62%;background:var(--pearl);color:var(--ink);
-  border:1px solid #7A5231;border-radius:12px;padding:7px 11px;font-size:14px;
-  font-family:'Fraunces',Georgia,serif;box-shadow:0 2px 8px rgba(0,0,0,.28)}
-.blase.oben{top:8%;left:6%}
-.blase.unten{bottom:8%;right:6%;background:var(--horn);color:var(--pearl);border-color:#2A1D14}
-.blase small{display:block;font-family:'IBM Plex Mono',monospace;font-size:10px;opacity:.7;margin-bottom:2px}
+.blase-bahn{position:absolute;left:0;width:100%;height:0;pointer-events:none;animation-duration:10s;animation-timing-function:linear;animation-fill-mode:both}
+.blase-bahn.von-links{animation-name:treibenRechts}
+.blase-bahn.von-rechts{animation-name:treibenLinks}
+@keyframes treibenRechts{0%{transform:translateX(-2%);opacity:0}8%{opacity:1}90%{opacity:1}100%{transform:translateX(52%);opacity:0}}
+@keyframes treibenLinks{0%{transform:translateX(52%);opacity:0}8%{opacity:1}90%{opacity:1}100%{transform:translateX(-2%);opacity:0}}
+.blase-bahn > .blase{position:absolute;left:4%;max-width:46%;background:var(--pearl);color:var(--ink);
+  border:1px solid #7A5231;border-radius:14px;padding:7px 12px;font-size:14px;
+  font-family:'Fraunces',Georgia,serif;box-shadow:0 3px 10px rgba(0,0,0,.28);
+  animation:wackeln 3.4s ease-in-out infinite}
+.blase-bahn > .blase.unten{background:var(--horn);color:var(--pearl);border-color:#2A1D14}
+.blase-bahn > .blase small{display:block;font-family:'IBM Plex Mono',monospace;font-size:10px;opacity:.7;margin-bottom:2px}
+@keyframes wackeln{
+  0%  {transform:translate(0,0) rotate(-2deg)}
+  25% {transform:translate(6px,-7px) rotate(1.5deg)}
+  50% {transform:translate(0,-12px) rotate(2.5deg)}
+  75% {transform:translate(-6px,-6px) rotate(-1deg)}
+  100%{transform:translate(0,0) rotate(-2deg)}}
+@media(prefers-reduced-motion:reduce){.blase-bahn{animation:none}.blase-bahn > .blase{animation:none}}
 .schnellreihe{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:12px}
 .schnellreihe button{background:var(--field);border:1px solid var(--line);border-radius:14px;
   padding:6px 12px;font-family:'Fraunces',Georgia,serif;font-size:14px;color:var(--ink);cursor:pointer}
@@ -567,7 +579,7 @@ function unlock(){
   if (sprung || zumSpielen) history.replaceState({ ansicht: "mainView" }, "", location.pathname);
   if (sprung) setTimeout(() => spielAusNachricht(decodeURIComponent(sprung)), 700);
   else if (zumSpielen) setTimeout(async () => { await spieleLaden(); zeigeAnsicht("gamesView"); }, 300);
-  try { history.replaceState({ ansicht: "mainView" }, ""); } catch (e) {}
+  try { history.replaceState({ ansicht: "mainView" }, "", /partie=/.test(location.hash) ? location.pathname : undefined); } catch (e) {}
   try { localStorage.setItem("bgl-pw", PASSWORT); } catch(e){}
   $("stand").textContent = "verbinde …";
   setTimeout(() => load(), 400);
@@ -2397,7 +2409,7 @@ function ergebnisZeigen(){
 }
 
 // --- Zuruf ---
-const SCHNELL = ["Pfff", "Glückspilz", "Menno", "Gönnung", "Jipiiieeeh"];
+const SCHNELL = ["Pfff", "Glückspilz", "Menno", "Gönnung", "Jipiiieeeh", "Glückwunsch!", "Es kann nicht sein", "Revanche!!!"];
 let chatZeilen = [], gezeigt = new Set(), blasen = [];
 
 function chatName(sitzNr){
@@ -2429,30 +2441,55 @@ function renderChat(){
   box.scrollTop = box.scrollHeight;
 }
 
+// Sprechblasen treiben zehn Sekunden in einer ruhigen, wackelnden Schleife übers Brett.
+// Jede Blase ist ein eigenes Element — so startet ihre Bewegung beim Neuzeichnen nicht von vorn.
+const BLASEN_DAUER = 10000;
+
 function renderBlasen(){
   const box = $("blasen");
   if (!box) return;
   const jetzt = Date.now();
-  blasen = blasen.filter(b => jetzt - b.zeit < 10000);
+  blasen = blasen.filter(b => jetzt - b.zeit < BLASEN_DAUER);
+  box.querySelectorAll(".blase-bahn").forEach(el => { if (!blasen.some(b => b.id === el.dataset.id)) el.remove(); });
+}
+
+function blaseEinfuegen(b){
+  const box = $("blasen");
+  if (!box) return;
   const meinSitz = aktuellesSpiel ? sitz(aktuellesSpiel.id) : 0;
-  box.innerHTML = blasen.map(b =>
-    `<div class="blase ${b.sitz === meinSitz ? "unten" : "oben"}"><small></small><span class="bt"></span></div>`).join("");
-  box.querySelectorAll(".blase").forEach((el,i) => {
-    el.querySelector("small").textContent = chatName(blasen[i].sitz);
-    el.querySelector(".bt").textContent = blasen[i].text;
-  });
+  const eigen = b.sitz === meinSitz;
+  // Bahn wählen: freie Höhe auf der eigenen bzw. gegnerischen Brettseite
+  const belegt = blasen.filter(x => x.id !== b.id && x.eigen === eigen).map(x => x.bahn);
+  let bahn = 0; while (belegt.includes(bahn) && bahn < 3) bahn++;
+  b.eigen = eigen; b.bahn = bahn;
+
+  const aussen = document.createElement("div");
+  aussen.className = "blase-bahn " + (eigen ? "von-rechts" : "von-links");
+  aussen.style.top = (eigen ? 58 + bahn * 11 : 6 + bahn * 11) + "%";
+  aussen.dataset.id = b.id;
+  const blase = document.createElement("div");
+  blase.className = "blase " + (eigen ? "unten" : "oben");
+  blase.style.animationDelay = (-Math.random() * 3).toFixed(2) + "s";
+  const wer = document.createElement("small");
+  wer.textContent = chatName(b.sitz);
+  const text = document.createElement("span");
+  text.className = "bt";
+  text.textContent = b.text;
+  blase.append(wer, text);
+  aussen.appendChild(blase);
+  box.appendChild(aussen);
+  setTimeout(() => { aussen.remove(); renderBlasen(); }, BLASEN_DAUER + 100);
 }
 
 function blaseZeigen(zeile){
   if (gezeigt.has(zeile.id)) return;
   gezeigt.add(zeile.id);
-  if (!zeile.schnell) return;                                   // nur Zurufe blubbern
-  if (Date.now() - new Date(zeile.created_at).getTime() > 10000) return;
+  if (Date.now() - new Date(zeile.created_at).getTime() > BLASEN_DAUER) return;
   const doppelt = blasen.some(b => b.sitz === zeile.sitz && b.text === zeile.text && Date.now() - b.zeit < 3000);
-  if (doppelt) return;                                          // eigener Zuruf kommt gleich nochmal zurück
-  blasen.push({ id: zeile.id, sitz: zeile.sitz, text: zeile.text, zeit: Date.now() });
-  renderBlasen();
-  setTimeout(renderBlasen, 10100);
+  if (doppelt) return;                                          // eigene Nachricht kommt gleich nochmal zurück
+  const b = { id: String(zeile.id), sitz: zeile.sitz, text: zeile.text, zeit: Date.now() };
+  blasen.push(b);
+  blaseEinfuegen(b);
 }
 
 function chatAufnehmen(zeile, alt){
@@ -2465,7 +2502,8 @@ function chatAufnehmen(zeile, alt){
 
 async function chatLaden(gid){
   chatZeilen = []; blasen = []; gezeigt = new Set();
-  renderChat(); renderBlasen(); renderSchnell();
+  if ($("blasen")) $("blasen").innerHTML = "";
+  renderChat(); renderSchnell();
   try {
     const r = await withTimeout(db.from("chat").select("*").eq("game", gid));
     if (!r.error && r.data){
@@ -2480,10 +2518,10 @@ async function chatSenden(text, schnell){
   if (!aktuellesSpiel || !text.trim()) return;
   const meinSitz = sitz(aktuellesSpiel.id) || meinPlatz(aktuellesSpiel) || 1;
   const zeile = { game: aktuellesSpiel.id, sitz: meinSitz, text: text.trim().slice(0, 200), schnell: !!schnell };
-  if (schnell){
-    blasen.push({ id: "eigen" + Date.now(), sitz: meinSitz, text: zeile.text, zeit: Date.now() });
-    renderBlasen();
-    setTimeout(renderBlasen, 10100);
+  {
+    const b = { id: "eigen" + Date.now(), sitz: meinSitz, text: zeile.text, zeit: Date.now() };
+    blasen.push(b);
+    blaseEinfuegen(b);
   }
   try {
     const r = await withTimeout(db.from("chat").insert(zeile).select());
@@ -2492,6 +2530,10 @@ async function chatSenden(text, schnell){
       chatAufnehmen(r.data[0], true);
     }
   } catch (e) { /* stumm */ }
+  if (!aktuellesSpiel.training){
+    const g = aktuellesSpiel;
+    benachrichtigen(gegnerVon(g, meinSitz), `Nachricht von ${nameOf(spielerVon(g, meinSitz))}`, zeile.text, "chat:" + g.id);
+  }
 }
 
 // Der eigene angefangene Zug wird geschützt — aber nur, solange er wirklich läuft.
@@ -3311,6 +3353,10 @@ async function spielOeffnen(g, { frage = true, ausVerlauf = false } = {}){
   $("weiterBtn").classList.add("hidden");
   $("zurufPanel").classList.toggle("hidden", !!g.training);
   if (g.training){ brettZeichnen(); return; }
+  try {
+    if (swReg && swReg.getNotifications)
+      swReg.getNotifications({ tag: "chat-" + g.id }).then(l => l.forEach(n => n.close())).catch(() => {});
+  } catch (e) {}
   if (g.status === "laufend") kanalOeffnen(g.id);
   brettZeichnen();
   chatLaden(g.id);
@@ -3517,7 +3563,8 @@ function zeigeAnsicht(name, ausVerlauf, spielId){
   if (!ausVerlauf){
     const jetzt = history.state || {};
     const gleich = jetzt.ansicht === name && (name !== "boardView" || jetzt.spiel === spielId);
-    if (!gleich) history.pushState({ ansicht: name, spiel: spielId || null }, "");
+    if (!gleich) history.pushState({ ansicht: name, spiel: spielId || null }, "",
+      name === "boardView" && spielId && spielId !== "training" ? "#partie=" + spielId : location.pathname);
   }
   ["mainView","statsView","gamesView","boardView","diceView"].forEach(v => {
     const el = $(v);

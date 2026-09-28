@@ -6,14 +6,27 @@ self.addEventListener("push", (e) => {
   let d = {};
   try { d = e.data ? e.data.json() : {}; } catch (_) { d = { titel: "BätsXherei", text: e.data ? e.data.text() : "" }; }
 
-  const anzeigen = self.registration.showNotification(d.titel || "BätsXherei", {
+  // "chat:<id>" kennzeichnet Chat-Nachrichten — eigene Kennung, damit sie "Du bist dran" nicht ersetzen
+  let spiel = d.spiel || null, tag = "bx";
+  if (typeof spiel === "string" && spiel.startsWith("chat:")){ spiel = spiel.slice(5); tag = "chat-" + spiel; }
+  else if (spiel) tag = "spiel-" + spiel;
+
+  // Ist genau diese Partie gerade sichtbar geöffnet? Dann keine Benachrichtigung.
+  const anzeigen = (async () => {
+    if (spiel){
+      const fenster = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+      const offen = fenster.some(f => f.visibilityState === "visible" && (f.url || "").includes("partie=" + spiel));
+      if (offen) return;
+    }
+    return self.registration.showNotification(d.titel || "BätsXherei", {
     body: d.text || "",
     icon: "/icon-192.png",
     badge: "/badge-96.png",
-    tag: d.spiel ? "spiel-" + d.spiel : "bx",
+    tag,
     renotify: true,
-    data: { spiel: d.spiel || null },
-  });
+    data: { spiel },
+    });
+  })();
 
   let zahl = Promise.resolve();
   try {
