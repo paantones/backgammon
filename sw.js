@@ -2,9 +2,10 @@
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (e) => e.waitUntil(self.clients.claim()));
 
-// Sichtbare App-Fenster fragen, welche Partie sie gerade zeigen (Antwort binnen 400 ms, sonst "keine")
-async function zeigtGerade(spiel){
+// Sichtbare App-Fenster fragen, was sie gerade zeigen (Antwort binnen 400 ms, sonst "nichts")
+async function sichtbareAnsichten(){
   const fenster = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+  const antworten = [];
   for (const f of fenster){
     if (f.visibilityState !== "visible") continue;
     const antwort = await new Promise((fertig) => {
@@ -14,9 +15,9 @@ async function zeigtGerade(spiel){
       try { f.postMessage({ typ: "welchePartie" }, [kanal.port2]); }
       catch (_) { clearTimeout(uhr); fertig(null); }
     });
-    if (antwort && antwort.spiel === spiel) return true;
+    if (antwort) antworten.push(antwort);
   }
-  return false;
+  return antworten;
 }
 
 self.addEventListener("push", (e) => {
@@ -24,20 +25,34 @@ self.addEventListener("push", (e) => {
   try { d = e.data ? e.data.json() : {}; } catch (_) { d = { titel: "BätsXherei", text: e.data ? e.data.text() : "" }; }
 
   // "chat:<id>" kennzeichnet Chat-Nachrichten — eigene Kennung, damit sie "Du bist dran" nicht ersetzen
-  let spiel = d.spiel || null, tag = "bx";
-  if (typeof spiel === "string" && spiel.startsWith("chat:")){ spiel = spiel.slice(5); tag = "chat-" + spiel; }
-  else if (spiel) tag = "spiel-" + spiel;
+  // Kennung aus dem Feld "spiel": Partie, Chat einer Partie, Chat-Unterhaltung oder Herausforderung
+  let spiel = d.spiel || null, tag = "bx", ziel = { typ: "spielen" }, stillWenn = () => false;
+  const k = typeof spiel === "string" ? spiel : "";
+  if (k.startsWith("chat:")){
+    spiel = k.slice(5); tag = "chat-" + spiel; ziel = { typ: "spiel", id: spiel };
+    stillWenn = (a) => a.spiel === spiel;
+  } else if (k.startsWith("nachricht:")){
+    const konv = k.slice(10); spiel = null; tag = "nachricht-" + konv; ziel = { typ: "chat", konv };
+    stillWenn = (a) => a.chat === konv;
+  } else if (k.startsWith("herausforderung:")){
+    spiel = null; tag = "herausforderung-" + k.slice(16); ziel = { typ: "liga" };
+    stillWenn = (a) => a.ansicht === "mainView";
+  } else if (spiel){
+    tag = "spiel-" + spiel; ziel = { typ: "spiel", id: spiel };
+    stillWenn = (a) => a.spiel === spiel;
+  }
 
   // Ist genau diese Partie gerade sichtbar geöffnet? Dann keine Benachrichtigung.
   const anzeigen = (async () => {
-    if (spiel && await zeigtGerade(spiel)) return;
+    const offen = await sichtbareAnsichten();
+    if (offen.some(stillWenn)) return;               // genau das ist gerade offen: keine Benachrichtigung
     return self.registration.showNotification(d.titel || "BätsXherei", {
     body: d.text || "",
     icon: "/icon-192.png",
     badge: "/badge-96.png",
     tag,
     renotify: true,
-    data: { spiel },
+    data: { spiel, ziel },
     });
   })();
 
@@ -53,17 +68,19 @@ self.addEventListener("push", (e) => {
 
 self.addEventListener("notificationclick", (e) => {
   e.notification.close();
-  const spiel = e.notification.data && e.notification.data.spiel;
-  // Mit Partie: direkt aufs Brett. Ohne Partie (etwa Testnachricht): in den Spielen-Reiter.
-  const ziel = spiel ? "/#spiel=" + spiel : "/#spielen";
+  const daten = e.notification.data || {};
+  const ziel = daten.ziel || (daten.spiel ? { typ: "spiel", id: daten.spiel } : { typ: "spielen" });
+  const adresse = ziel.typ === "spiel" ? "/#spiel=" + ziel.id
+                : ziel.typ === "chat" ? "/#chat=" + encodeURIComponent(ziel.konv)
+                : ziel.typ === "liga" ? "/#liga" : "/#spielen";
   e.waitUntil((async () => {
     const fenster = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
     for (const f of fenster){
       if ("focus" in f){
-        f.postMessage(spiel ? { typ: "spiel", id: spiel } : { typ: "spielen" });
+        f.postMessage(ziel);
         return f.focus();
       }
     }
-    return self.clients.openWindow(ziel);
+    return self.clients.openWindow(adresse);
   })());
 });

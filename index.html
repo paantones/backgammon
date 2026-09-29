@@ -64,6 +64,38 @@ h1{font-family:'Fraunces',Georgia,serif;font-weight:800;font-size:clamp(30px,7vw
 #board{display:block;width:100%;height:auto;margin:4px 0 10px;touch-action:manipulation}
 .brettbox{position:relative}
 .zugleiste .btn{flex:1}
+.unternav{display:flex;gap:6px;max-width:1080px;margin:-8px auto 14px;padding:0 18px}
+.unternav button{flex:1;background:var(--field);border:1px solid var(--line);border-radius:18px;padding:8px 6px;
+  font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft);cursor:pointer}
+.unternav button.aktiv{background:var(--horn);color:var(--pearl);border-color:var(--horn)}
+.konvleiste{display:flex;gap:6px;overflow-x:auto;padding-bottom:10px;margin-bottom:6px;border-bottom:1px solid var(--line)}
+.konvleiste button{flex:none;position:relative;background:var(--field);border:1px solid var(--line);border-radius:16px;
+  padding:6px 12px;font-family:'IBM Plex Sans',sans-serif;font-size:14px;color:var(--ink);cursor:pointer}
+.konvleiste button.aktiv{background:var(--horn);color:var(--pearl);border-color:var(--horn)}
+.konvleiste .neu{display:inline-block;min-width:16px;height:16px;border-radius:8px;background:#C7332A;color:#fff;
+  font-size:10px;line-height:16px;text-align:center;margin-left:6px;padding:0 4px}
+.nachrichtenliste{display:flex;flex-direction:column;gap:8px;max-height:55vh;overflow-y:auto;padding:8px 2px}
+.nachricht{max-width:80%;padding:7px 11px;border-radius:14px;background:var(--pearl);border:1px solid var(--line);align-self:flex-start}
+.nachricht.meine{align-self:flex-end;background:var(--horn);color:var(--pearl);border-color:var(--horn)}
+.nachricht small{display:block;font-family:'IBM Plex Mono',monospace;font-size:10px;opacity:.7;margin-bottom:2px}
+.chateingabe{display:flex;gap:8px;margin-top:10px}
+.chateingabe input{flex:1;min-width:0}
+.chateingabe .btn{width:auto;padding:10px 16px}
+.pusharten label{display:flex;gap:10px;align-items:center;padding:6px 0;font-size:15px}
+.pusharten input{width:20px;height:20px}
+.ortzeile{display:flex;gap:8px;margin-bottom:8px}
+.ortzeile input{flex:1;min-width:0}
+.ortzeile button{width:auto}
+.ortneu{display:flex;gap:8px;margin-top:6px}
+.ortneu input{flex:1;min-width:0}
+.ortneu .btn{width:auto;padding:10px 14px}
+.forderung{border-top:1px solid var(--line);padding:12px 0}
+.forderung:first-child{border-top:none;padding-top:0}
+.forderung .was{font-family:'Fraunces',Georgia,serif;font-size:19px;margin:0 0 4px}
+.forderung .wann{margin:0 0 10px;color:var(--ink-soft)}
+.forderung .knoepfe{display:flex;gap:8px}
+.forderung .knoepfe button{flex:1}
+.herausforderung{border:2px solid #8C3226}
 @keyframes reinLinks{from{opacity:.3;transform:translateX(28px)}to{opacity:1;transform:none}}
 @keyframes reinRechts{from{opacity:.3;transform:translateX(-28px)}to{opacity:1;transform:none}}
 .rein-links{animation:reinLinks .2s ease-out}
@@ -259,10 +291,10 @@ ul.log li.edit .btn{width:auto;padding:9px 16px}
 
   <div id="app" class="hidden">
     <nav class="tabs" id="tabs">
-      <button class="tab aktiv" data-view="mainView">Liga</button>
-      <button class="tab" data-view="statsView">Statistik</button>
+      <button class="tab aktiv" data-view="mainView">Liga<span class="zaehler hidden" id="ligaZaehler">0</span></button>
       <button class="tab" data-view="gamesView">Spielen<span class="zaehler hidden" id="dranZaehler">0</span></button>
-      <button class="tab" data-view="diceView">Würfel</button>
+      <button class="tab" data-view="chatView">Chat<span class="zaehler hidden" id="chatZaehler">0</span></button>
+      <button class="tab" data-view="extras">Extras</button>
     </nav>
     <div class="head">
       <div class="head-in">
@@ -271,6 +303,11 @@ ul.log li.edit .btn{width:auto;padding:9px 16px}
       </div>
     </div>
     <svg class="strip" viewBox="0 0 380 48" preserveAspectRatio="none" aria-hidden="true" id="strip"></svg>
+    <div class="unternav hidden" id="unterNav">
+      <button data-unter="statsView">Statistik</button>
+      <button data-unter="diceView">Würfeln</button>
+      <button data-unter="settingsView">Einstellungen</button>
+    </div>
 
     <div class="stack hidden" id="statsView">
       <div class="panel">
@@ -348,19 +385,6 @@ ul.log li.edit .btn{width:auto;padding:9px 16px}
         <div id="gameList"><p class="empty">Noch keine.</p></div>
       </div>
 
-      <div class="panel" id="pushPanel">
-        <p class="eyebrow">Benachrichtigungen</p>
-        <p class="note" id="pushText" style="margin:0 0 12px">Wird geprüft …</p>
-        <div class="field hidden" id="pushWerFeld">
-          <label for="pushWer">Benachrichtigen, wenn dran ist:</label>
-          <select id="pushWer"></select>
-        </div>
-        <button class="btn hidden" id="pushAn">Benachrichtigungen einschalten</button>
-        <button class="btn hidden" id="pushTest" style="margin-top:4px">Testnachricht an mich schicken</button>
-        <p class="note hidden" id="pushTestText" style="margin:10px 0 0"></p>
-        <button class="ghost hidden" id="pushAus" style="width:100%;margin-top:8px;padding:10px">ausschalten</button>
-      </div>
-
       <details class="panel alt" id="archivPanel">
         <summary>Beendete Partien</summary>
         <div id="archivList"><p class="empty">Noch keine.</p></div>
@@ -414,6 +438,58 @@ ul.log li.edit .btn{width:auto;padding:9px 16px}
       </div>
     </div>
 
+    <div class="stack hidden" id="chatView">
+      <div class="panel chatpanel">
+        <div class="konvleiste" id="konvLeiste"></div>
+        <div class="nachrichtenliste" id="nachrichtenListe"><p class="empty">Wird geladen …</p></div>
+        <div class="chateingabe" id="nachrichtEingabe">
+          <input id="nachrichtText" maxlength="500" placeholder="Nachricht an die Gruppe" autocomplete="off" />
+          <button class="btn" id="nachrichtSenden">Senden</button>
+        </div>
+        <p class="note" id="chatHinweis" style="margin:8px 0 0"></p>
+      </div>
+    </div>
+
+    <div class="stack hidden" id="settingsView">
+      <div class="panel" id="werPanel">
+        <p class="eyebrow">Dieses Gerät</p>
+        <p id="werText" style="margin:0 0 12px"></p>
+        <button class="ghost hidden" id="freigebenBtn" style="width:100%;padding:10px">Spieler*in freigeben</button>
+        <p class="note" id="freigebenHinweis">Gibt die Zuordnung frei. Danach kannst du dich auf einem anderen Gerät als diese Person auswählen.</p>
+      </div>
+      <div class="panel" id="pushPanel">
+        <p class="eyebrow">Benachrichtigungen</p>
+        <p class="note" id="pushText" style="margin:0 0 12px">Wird geprüft …</p>
+        <div class="field hidden" id="pushWerFeld">
+          <label for="pushWer">Benachrichtigen, wenn dran ist:</label>
+          <select id="pushWer"></select>
+        </div>
+        <button class="btn hidden" id="pushAn">Benachrichtigungen einschalten</button>
+        <button class="btn hidden" id="pushTest" style="margin-top:4px">Testnachricht an mich schicken</button>
+        <p class="note hidden" id="pushTestText" style="margin:10px 0 0"></p>
+        <button class="ghost hidden" id="pushAus" style="width:100%;margin-top:8px;padding:10px">ausschalten</button>
+        <div id="pushArten" class="pusharten">
+          <p class="note" style="margin:14px 0 6px">Benachrichtigen bei …</p>
+          <label><input type="checkbox" data-art="herausforderung" /> Herausforderungen</label>
+          <label><input type="checkbox" data-art="dran" /> wenn ich in einer Partie dran bin</label>
+          <label><input type="checkbox" data-art="gruppe" /> Gruppennachrichten</label>
+          <label><input type="checkbox" data-art="privat" /> privaten Nachrichten und Chat im Spiel</label>
+          <p class="note" id="pushArtenHinweis" style="margin:6px 0 0"></p>
+        </div>
+      </div>
+
+
+      <div class="panel">
+        <p class="eyebrow">Orte</p>
+        <div id="orteListe"></div>
+        <div class="ortneu">
+          <input id="ortName" maxlength="60" placeholder="Neuer Ort, z. B. Kulturspäti" autocomplete="off" />
+          <button class="btn" id="ortHinzu">Hinzufügen</button>
+        </div>
+        <p class="note">Diese Orte stehen beim Herausfordern zur Auswahl. Namen lassen sich direkt im Feld ändern.</p>
+      </div>
+    </div>
+
     <div class="stack hidden" id="diceView">
       <div class="panel">
         <svg class="wuerfelbuehne" id="wuerfelFeld" viewBox="0 0 240 110" role="img" aria-label="Zwei Würfel — tippen zum Würfeln"></svg>
@@ -429,10 +505,26 @@ ul.log li.edit .btn{width:auto;padding:9px 16px}
     </div>
 
     <div class="stack" id="mainView">
+      <div class="panel hidden herausforderung" id="forderungPanel">
+        <p class="eyebrow">Herausforderungen</p>
+        <div id="forderungListe"></div>
+      </div>
+
       <div class="panel">
         <p class="eyebrow">Tabelle</p>
         <div id="table"><p class="empty">Wird geladen …</p></div>
       </div>
+
+      <details class="panel alt" id="fordernPanel">
+        <summary>Jemanden herausfordern</summary>
+        <div class="field"><label for="fordWen">Wen?</label><select id="fordWen"></select></div>
+        <div class="field"><label for="fordTag">Wann?</label><select id="fordTag"></select></div>
+        <div class="field"><label for="fordZeit">Tageszeit</label>
+          <select id="fordZeit"><option value="vormittag">Vormittag</option><option value="nachmittag">Nachmittag</option><option value="abend" selected>Abend</option></select></div>
+        <div class="field"><label for="fordOrt">Wo?</label><select id="fordOrt"></select></div>
+        <button class="btn" id="fordSenden">Herausfordern</button>
+        <p class="note" id="fordHinweis" style="margin:10px 0 0"></p>
+      </details>
 
       <div class="panel">
         <p class="eyebrow">Partie eintragen</p>
@@ -580,16 +672,21 @@ function unlock(){
       if (e.data && e.data.typ === "welchePartie" && e.ports && e.ports[0]){
         const brettOffen = !$("boardView").classList.contains("hidden") && !document.hidden;
         const id = brettOffen && aktuellesSpiel && !aktuellesSpiel.training ? aktuellesSpiel.id : null;
-        e.ports[0].postMessage({ spiel: id });
+        const ansicht = ["mainView","gamesView","boardView","chatView","statsView","diceView","settingsView"].find(v => !$(v).classList.contains("hidden"));
+        e.ports[0].postMessage({ spiel: id, chat: chatOffen() ? chatKonv : null, ansicht: document.hidden ? null : ansicht });
         return;
       }
+      if (e.data && e.data.typ === "chat"){ chatKonv = e.data.konv || "gruppe"; zeigeAnsicht("chatView"); return; }
+      if (e.data && e.data.typ === "liga"){ zeigeAnsicht("mainView"); return; }
       if (e.data && e.data.typ === "spiel") spielAusNachricht(e.data.id);
       if (e.data && e.data.typ === "spielen"){ await spieleLaden(); zeigeAnsicht("gamesView"); }
     });
   }
   const sprung = (location.hash.match(/spiel=([^&]+)/) || [])[1];
   const zumSpielen = /^#spielen\b/.test(location.hash);
-  if (sprung || zumSpielen) history.replaceState({ ansicht: "mainView" }, "", location.pathname);
+  const zumChat = (location.hash.match(/chat=([^&]+)/) || [])[1];
+  if (sprung || zumSpielen || zumChat || /^#liga\b/.test(location.hash)) history.replaceState({ ansicht: "mainView" }, "", location.pathname);
+  if (zumChat) setTimeout(() => { chatKonv = decodeURIComponent(zumChat); zeigeAnsicht("chatView"); }, 700);
   if (sprung) setTimeout(() => spielAusNachricht(decodeURIComponent(sprung)), 700);
   else if (zumSpielen) setTimeout(async () => { await spieleLaden(); zeigeAnsicht("gamesView"); }, 300);
   try { history.replaceState({ ansicht: "mainView" }, "", /partie=/.test(location.hash) ? location.pathname : undefined); } catch (e) {}
@@ -685,37 +782,169 @@ async function load(tries = 6){
     return;
   }
   players = pRes.data; matches = mRes.data;
+  await geraeteLaden();
+  await nebendatenLaden();
   ligaGeladen = true;
   refresh();
+  zuordnungPruefen();
   $("stand").textContent = "Stand " + new Date().toLocaleTimeString("de-DE",{hour:"2-digit",minute:"2-digit"});
 }
 
-function deviceOwner(id){
+// ---------- Zuordnung Gerät ↔ Person ----------
+// Fest gespeichert in der Tabelle "geraete". Fehlt die Tabelle, rechnet die App wie früher.
+let geraeteZuordnung = null;     // { gerät: spieler }
+let onlineBeweise = [];          // [{ game, spieler }] — Online-Partien, die auf diesem Gerät gespielt wurden
+let zuordnungGefragt = false, zuordnungFreigegeben = false;
+
+// Wer spielt vermutlich auf diesem Gerät? Eingetragene Partien (beide Beteiligten) plus Online-Partien (eindeutig).
+function erkennungBerechnen(id){
   const mine = matches.filter(m => m.device === id);
-  if (mine.length < 5) return null;
+  const online = id === deviceId ? onlineBeweise : [];
+  const n = mine.length + online.length;
+  if (n < 3) return null;
   const dabei = {};
   mine.forEach(m => {
     dabei[m.winner] = (dabei[m.winner] || 0) + 1;
     dabei[m.loser]  = (dabei[m.loser]  || 0) + 1;
   });
+  online.forEach(o => { dabei[o.spieler] = (dabei[o.spieler] || 0) + 1; });
   const rang = Object.entries(dabei).sort((a,b) => b[1] - a[1]);
-  const erste  = rang[0] ? rang[0][1] / mine.length : 0;
-  const zweite = rang[1] ? rang[1][1] / mine.length : 0;
-  const klar = (erste >= 0.82 && zweite <= 0.55)
-            || (erste >  0.60 && zweite <= 0.40)
-            || (erste >= 0.95 && zweite <= 0.85);
+  const erste  = rang[0] ? rang[0][1] / n : 0;
+  const zweite = rang[1] ? rang[1][1] / n : 0;
+  const klar = (erste >= 0.75 && zweite <= 0.50)
+            || (erste >  0.60 && zweite <= 0.35)
+            || (erste >= 0.90 && zweite <= 0.80);
   return klar ? rang[0][0] : null;
+}
+
+function deviceOwner(id){
+  if (geraeteZuordnung) return geraeteZuordnung[id] || null;
+  return erkennungBerechnen(id);
 }
 
 const ich = () => deviceOwner(deviceId);
 
 function erkannteGeraete(){
   const zuordnung = {};
+  if (geraeteZuordnung){
+    Object.entries(geraeteZuordnung).forEach(([g, sp]) => { zuordnung[sp] = g; });
+    return zuordnung;
+  }
   new Set(matches.map(m => m.device).filter(Boolean)).forEach(g => {
     const besitzer = deviceOwner(g);
     if (besitzer) zuordnung[besitzer] = g;
   });
   return zuordnung;
+}
+
+async function onlineBeweiseLaden(){
+  try {
+    const r = await withTimeout(db.from("spielzuege").select("game,spieler").eq("device", deviceId).eq("training", false));
+    if (r.error || !r.data) return;
+    const gesehen = new Set();
+    onlineBeweise = [];
+    r.data.forEach(z => {
+      if (!z.spieler) return;
+      const k = z.game + "|" + z.spieler;
+      if (!gesehen.has(k)){ gesehen.add(k); onlineBeweise.push({ game: z.game, spieler: z.spieler }); }
+    });
+  } catch (e) {}
+}
+
+// Wer hat auf diesem Gerät schon eine Online-Partie zu Ende gespielt?
+// Hinweise: der hier gewählte Sitz (auch für ältere Partien) und archivierte Züge dieses Geräts.
+function beendeteOnlinePersonen(){
+  const personen = new Set();
+  games.filter(g => g.status === "fertig").forEach(g => {
+    let platz = null;
+    try { const v = localStorage.getItem("bgl-sitz-" + g.id); if (v === "1" || v === "2") platz = Number(v); } catch (e) {}
+    if (platz) personen.add(platz === 1 ? g.p1 : g.p2);
+    onlineBeweise.filter(o => o.game === g.id).forEach(o => personen.add(o.spieler));
+  });
+  return [...personen];
+}
+
+// Gerade eine Online-Partie beendet und noch niemandem zugeordnet? Dann gehört das Gerät dieser Person.
+async function nachOnlinePartie(g){
+  if (!g || g.training || !geraeteZuordnung || ich() || zuordnungFreigegeben) return;
+  const platz = sitz(g.id);
+  if (platz !== 1 && platz !== 2) return;                    // zugeschaut, nicht gespielt
+  const person = platz === 1 ? g.p1 : g.p2;
+  if (Object.values(geraeteZuordnung).includes(person)) return;
+  if (await zuordnen(person))
+    dialog("Gerät zugeordnet", `Dieses Gerät gehört jetzt ${nameOf(person)}. Falls das nicht stimmt: Extras → Einstellungen → Spieler*in freigeben.`,
+      [{ text: "OK", wert: true, art: "leise" }]);
+}
+
+// Wer kommt für dieses Gerät in Frage? Personen mit Partien hier, die noch keinem Gerät gehören.
+function zuordnungsKandidaten(){
+  const vergeben = new Set(Object.values(geraeteZuordnung || {}));
+  const hier = new Set();
+  matches.filter(m => m.device === deviceId).forEach(m => { hier.add(m.winner); hier.add(m.loser); });
+  onlineBeweise.forEach(o => hier.add(o.spieler));
+  return players.filter(p => hier.has(p.id) && !vergeben.has(p.id));
+}
+
+async function zuordnen(spieler){
+  const r = await withTimeout(db.from("geraete").insert({ device: deviceId, spieler }));
+  if (r && r.error){
+    await geraeteLaden();                                    // vermutlich gerade woanders vergeben
+    return false;
+  }
+  geraeteZuordnung = { ...(geraeteZuordnung || {}), [deviceId]: spieler };
+  refresh();
+  return true;
+}
+
+async function geraeteLaden(){
+  try {
+    const r = await withTimeout(db.from("geraete").select("*"));
+    if (r.error || !r.data){ geraeteZuordnung = null; return; }
+    const z = {};
+    r.data.forEach(x => { z[x.device] = x.spieler; });
+    geraeteZuordnung = z;
+  } catch (e) { geraeteZuordnung = null; }
+}
+
+// Nach dem Laden: automatisch zuordnen, wenn eindeutig — sonst fragen
+async function zuordnungPruefen(){
+  if (!geraeteZuordnung || ich() || zuordnungGefragt || zuordnungFreigegeben) return;
+  zuordnungGefragt = true;
+  await onlineBeweiseLaden();
+  if (!games.length) await spieleLaden();
+  const vergeben = new Set(Object.values(geraeteZuordnung));
+  // Vorrang: genau eine Person hat hier eine Online-Partie zu Ende gespielt
+  const online = beendeteOnlinePersonen();
+  if (online.length === 1 && !vergeben.has(online[0])){ await zuordnen(online[0]); return; }
+  const vorschlag = erkennungBerechnen(deviceId);
+  if (vorschlag && !vergeben.has(vorschlag)){ await zuordnen(vorschlag); return; }
+  const kandidaten = zuordnungsKandidaten();
+  if (!kandidaten.length) return;                            // noch keine Partie auf diesem Gerät
+  const wahl = await dialog("Wer bist du?",
+    "Wähle, wem dieses Gerät gehört. Zur Auswahl stehen alle, die hier schon Partien eingetragen oder gespielt haben und noch keinem Gerät zugeordnet sind.",
+    kandidaten.map(p => ({ text: p.name, wert: p.id, art: "hell" })).concat([{ text: "Später", wert: null, art: "leise" }]));
+  if (!wahl) return;
+  const ok = await zuordnen(wahl);
+  if (!ok){
+    zuordnungGefragt = false;
+    await dialog("Schon vergeben", `${nameOf(wahl)} ist inzwischen einem anderen Gerät zugeordnet.`, [{ text: "OK", wert: true, art: "leise" }]);
+    zuordnungPruefen();
+  }
+}
+
+async function freigeben(){
+  const mich = ich();
+  if (!mich || !geraeteZuordnung) return;
+  const ok = await dialog("Spieler*in freigeben?",
+    `Dieses Gerät gehört dann nicht mehr ${nameOf(mich)}. ${nameOf(mich)} kann sich danach auf einem anderen Gerät auswählen.`,
+    [{ text: "Ja, freigeben", wert: true, art: "gefahr" }, { text: "Doch nicht", wert: false, art: "leise" }]);
+  if (!ok) return;
+  try { await withTimeout(db.from("geraete").delete().eq("device", deviceId)); } catch (e) {}
+  delete geraeteZuordnung[deviceId];
+  zuordnungFreigegeben = true;                               // auf diesem Gerät nicht gleich wieder fragen
+  try { localStorage.removeItem("bgl-push-spieler"); } catch (e) {}
+  refresh();
+  einstellungenZeigen();
 }
 
 async function schnueffeln(zielId){
@@ -1180,9 +1409,11 @@ function refresh(){
   // Zuordnung des Geräts hängt an den Liga-Daten: davon abhängige Ansichten nachziehen
   try {
     dranZaehlen();
-    if (!$("gamesView").classList.contains("hidden")){ renderGames(); pushAnzeigen(); trainingSuchen(); }
+    if (!$("gamesView").classList.contains("hidden")){ renderGames(); trainingSuchen(); }
     if (!$("boardView").classList.contains("hidden") && stand) brettZeichnen();
-  } catch (e) {}
+    forderungenZeigen(); fordernFormular(); nachrichtenZeigen();
+    if (!$("settingsView").classList.contains("hidden")) einstellungenZeigen();
+  } catch (e) { console.error(e); }
 }
 
 function renderH2H(){
@@ -2547,10 +2778,10 @@ async function chatSenden(text, schnell){
   if (!aktuellesSpiel.training){
     const g = aktuellesSpiel;
     if (meinSitz === 1 || meinSitz === 2){
-      benachrichtigen(gegnerVon(g, meinSitz), `Nachricht von ${nameOf(spielerVon(g, meinSitz))}`, zeile.text, "chat:" + g.id);
+      benachrichtigen(gegnerVon(g, meinSitz), `Nachricht von ${nameOf(spielerVon(g, meinSitz))}`, zeile.text, "chat:" + g.id, "privat");
     } else {
       const wer = ich() ? `${nameOf(ich())} (schaut zu)` : "Zuschauer*in";
-      [g.p1, g.p2].forEach(id => benachrichtigen(id, `Nachricht von ${wer}`, zeile.text, "chat:" + g.id));
+      [g.p1, g.p2].forEach(id => benachrichtigen(id, `Nachricht von ${wer}`, zeile.text, "chat:" + g.id, "privat"));
     }
   }
 }
@@ -2568,9 +2799,11 @@ function standUebernehmen(frisch){
   if (istVeraltet(frisch.state)) return;
   if (JSON.stringify(frisch.state) === JSON.stringify(stand) && frisch.status === aktuellesSpiel.status) return;
   if (eigenerZugLaeuft(frisch.state && frisch.state.turn)) return;
+  const geradeBeendet = frisch.status === "fertig" && aktuellesSpiel.status !== "fertig";
   aktuellesSpiel = frisch;
   stand = frisch.state;
   versionMerken(stand);
+  if (geradeBeendet) nachOnlinePartie(frisch);
   verlauf = []; zugListe = []; gewaehlt = null;
   if (vorschau && vorschau.art === "letzter"){ vorschauAktiv = false; vorschau = null; }
   brettZeichnen();
@@ -2661,6 +2894,7 @@ async function partieAbschliessen(){
   brettZeichnen();
   if (training){ await trainingSichern(true); return; }
   await ergebnisEintragen();
+  nachOnlinePartie(aktuellesSpiel);
   {
     const g = aktuellesSpiel, art = stand.art === 3 ? "Backgammon" : stand.art === 2 ? "Gammon" : "einfacher Sieg";
     benachrichtigen(gegnerVon(g, stand.gewinner), "Partie vorbei", `${nameOf(spielerVon(g, stand.gewinner))} hat gewonnen — ${art}.`, g.id);
@@ -2872,6 +3106,303 @@ function dialog(titel, text, knoepfe){
   });
 }
 
+// ================= Gruppenchat, Herausforderungen, Einstellungen =================
+let orte = [], forderungen = [], nachrichten = [], praefs = {};
+let chatKonv = "gruppe", letzteExtra = "statsView", echtzeitGlobal = null;
+const ARTEN = ["herausforderung", "dran", "gruppe", "privat"];
+const TAGESZEIT = { vormittag: "vormittags", nachmittag: "nachmittags", abend: "abends" };
+
+function escHtml(t){ return String(t == null ? "" : t).replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c])); }
+function heuteIso(){ const d = new Date(); return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0"); }
+function tagIso(plus){ const d = new Date(); d.setDate(d.getDate() + plus); return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0"); }
+function tagText(iso){
+  if (iso === heuteIso()) return "heute";
+  if (iso === tagIso(1)) return "morgen";
+  return new Date(iso + "T12:00:00").toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit" });
+}
+function ortName(id){ const o = orte.find(x => x.id === id); return o ? o.name : "Ort unbekannt"; }
+function zeitKurz(iso){
+  const d = new Date(iso), heute = new Date().toDateString() === d.toDateString();
+  const uhr = d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+  return heute ? uhr : d.toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit" }) + " " + uhr;
+}
+
+async function nebendatenLaden(){
+  const holen = async (tab, bau) => {
+    try { const r = await withTimeout(bau(db.from(tab))); if (r && !r.error && r.data) return r.data; } catch (e) {}
+    return null;
+  };
+  const o = await holen("orte", t => t.select("*").order("name"));
+  if (o) orte = o;
+  const f = await holen("herausforderungen", t => t.select("*").order("created_at", { ascending: false }).limit(300));
+  if (f) forderungen = f;
+  const n = await holen("nachrichten", t => t.select("*").order("created_at", { ascending: true }).limit(1500));
+  if (n) nachrichten = n;
+  const e = await holen("einstellungen", t => t.select("*"));
+  if (e){ praefs = {}; e.forEach(x => { praefs[x.spieler] = x.benachrichtigungen || {}; }); }
+  try { if (!localStorage.getItem("bgl-gelesen-start")) localStorage.setItem("bgl-gelesen-start", String(Date.now())); } catch (err) {}
+  echtzeitGlobalStarten();
+}
+
+function echtzeitGlobalStarten(){
+  if (echtzeitGlobal || !db.channel) return;
+  try {
+    echtzeitGlobal = db.channel("bx-global")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "nachrichten" }, (p) => nachrichtEingang(p.new))
+      .on("postgres_changes", { event: "*", schema: "public", table: "herausforderungen" }, (p) => forderungEingang(p.new))
+      .subscribe();
+  } catch (e) {}
+}
+
+// ---------- Chat ----------
+function konvVon(n){
+  if (!n.an) return "gruppe";
+  const mich = ich();
+  if (!mich) return null;
+  if (n.von === mich) return n.an;
+  if (n.an === mich) return n.von;
+  return null;
+}
+function gelesenBis(k){
+  try { return Number(localStorage.getItem("bgl-gelesen-" + k) || localStorage.getItem("bgl-gelesen-start") || 0); } catch (e) { return 0; }
+}
+function ungelesen(k){
+  const mich = ich(), t = gelesenBis(k);
+  return nachrichten.filter(n => konvVon(n) === k && n.von !== mich && new Date(n.created_at).getTime() > t).length;
+}
+function chatOffen(){ return !$("chatView").classList.contains("hidden") && !document.hidden; }
+
+function chatZaehlerSetzen(){
+  const mich = ich();
+  const konvs = ["gruppe"].concat(mich ? players.filter(p => p.id !== mich).map(p => p.id) : []);
+  const n = konvs.reduce((a, k) => a + (chatOffen() && k === chatKonv ? 0 : ungelesen(k)), 0);
+  const z = $("chatZaehler");
+  if (z){ z.textContent = n; z.classList.toggle("hidden", n === 0); }
+}
+
+function nachrichtenZeigen(){
+  if ($("chatView").classList.contains("hidden")){ chatZaehlerSetzen(); return; }
+  const mich = ich();
+  if (!mich) chatKonv = "gruppe";
+  const konvs = ["gruppe"].concat(mich ? players.filter(p => p.id !== mich).sort((a,b) => a.name.localeCompare(b.name)).map(p => p.id) : []);
+  $("konvLeiste").innerHTML = konvs.map(k => {
+    const neu = k === chatKonv ? 0 : ungelesen(k);
+    return `<button data-konv="${escHtml(k)}" class="${k === chatKonv ? "aktiv" : ""}">${escHtml(k === "gruppe" ? "Gruppe" : nameOf(k))}${neu ? `<span class="neu">${neu}</span>` : ""}</button>`;
+  }).join("");
+  const liste = nachrichten.filter(n => konvVon(n) === chatKonv);
+  const box = $("nachrichtenListe");
+  box.innerHTML = liste.length
+    ? liste.map(n => `<div class="nachricht ${n.von === mich ? "meine" : ""}"><small>${n.von === mich ? "du" : escHtml(nameOf(n.von))} · ${escHtml(zeitKurz(n.created_at))}</small>${escHtml(n.text)}</div>`).join("")
+    : `<p class="empty">${chatKonv === "gruppe" ? "Noch keine Gruppennachrichten." : "Noch keine Nachrichten mit " + escHtml(nameOf(chatKonv)) + "."}</p>`;
+  box.scrollTop = box.scrollHeight;
+  if (!document.hidden){ try { localStorage.setItem("bgl-gelesen-" + chatKonv, String(Date.now())); } catch (e) {} }
+  $("nachrichtText").placeholder = chatKonv === "gruppe" ? "Nachricht an die Gruppe" : "Nachricht an " + nameOf(chatKonv);
+  $("nachrichtText").disabled = !mich; $("nachrichtSenden").disabled = !mich;
+  $("chatHinweis").textContent = mich
+    ? (chatKonv === "gruppe" ? "Alle sehen Gruppennachrichten." : "Nur ihr zwei seht diese Unterhaltung in der App.")
+    : "Lesen geht. Zum Schreiben muss dieses Gerät einer Person zugeordnet sein (Extras → Einstellungen).";
+  chatZaehlerSetzen();
+  try { if (swReg && swReg.getNotifications) swReg.getNotifications({ tag: "nachricht-" + chatKonv }).then(l => l.forEach(x => x.close())).catch(() => {}); } catch (e) {}
+}
+
+function nachrichtEingang(n){
+  if (!n || !n.id || nachrichten.some(x => x.id === n.id)) return;
+  nachrichten.push(n);
+  nachrichtenZeigen();
+}
+
+async function nachrichtSenden(){
+  const mich = ich(), feld = $("nachrichtText");
+  const text = feld.value.trim();
+  if (!mich || !text) return;
+  feld.value = "";
+  const zeile = { von: mich, an: chatKonv === "gruppe" ? null : chatKonv, text };
+  try {
+    const r = await withTimeout(db.from("nachrichten").insert(zeile).select());
+    if (r && r.error) throw new Error(r.error.message);
+    if (r && r.data && r.data[0]) nachrichtEingang(r.data[0]);
+  } catch (e) {
+    feld.value = text;
+    $("chatHinweis").textContent = "Senden hat nicht geklappt: " + (e && e.message || e);
+    return;
+  }
+  if (zeile.an) benachrichtigen(zeile.an, `Nachricht von ${nameOf(mich)}`, text, "nachricht:" + mich, "privat");
+  else players.filter(p => p.id !== mich).forEach(p =>
+    benachrichtigen(p.id, `${nameOf(mich)} an die Gruppe`, text, "nachricht:gruppe", "gruppe"));
+}
+
+// ---------- Herausforderungen ----------
+function forderungEingang(f){
+  if (!f || !f.id) return;
+  const i = forderungen.findIndex(x => x.id === f.id);
+  if (i >= 0) forderungen[i] = { ...forderungen[i], ...f }; else forderungen.unshift(f);
+  forderungenZeigen();
+}
+
+function forderungenZeigen(){
+  const panel = $("forderungPanel"), mich = ich();
+  if (!panel) return;
+  const heute = heuteIso();
+  const weg = (() => { try { return JSON.parse(localStorage.getItem("bgl-forderung-weg") || "[]"); } catch (e) { return []; } })();
+  const meine = mich ? forderungen.filter(f => (f.von === mich || f.an === mich) && f.tag >= heute && !weg.includes(f.id)
+    && (f.status === "offen" || f.status === "angenommen" || (f.status === "abgelehnt" && f.von === mich) || (f.status === "abgesagt" || f.status === "zurueckgezogen"))) : [];
+  const rang = (f) => f.an === mich && f.status === "offen" ? 0 : f.status === "angenommen" ? 1 : f.status === "offen" ? 2 : 3;
+  meine.sort((a, b) => rang(a) - rang(b) || a.tag.localeCompare(b.tag));
+  const wann = (f) => `${escHtml(tagText(f.tag))} · ${escHtml(TAGESZEIT[f.zeit] || f.zeit)} · ${escHtml(ortName(f.ort))}`;
+  panel.classList.toggle("hidden", !meine.length);
+  $("forderungListe").innerHTML = meine.map(f => {
+    const andere = nameOf(f.von === mich ? f.an : f.von);
+    if (f.an === mich && f.status === "offen") return `<div class="forderung"><p class="was">${escHtml(andere)} fordert dich heraus!</p><p class="wann">${wann(f)}</p>
+      <div class="knoepfe"><button class="btn" data-ford="angenommen" data-id="${f.id}">Annehmen</button><button class="ghost" data-ford="abgelehnt" data-id="${f.id}">Ablehnen</button></div></div>`;
+    if (f.status === "offen") return `<div class="forderung"><p class="was">Du forderst ${escHtml(andere)} heraus</p><p class="wann">${wann(f)} — wartet auf Antwort</p>
+      <div class="knoepfe"><button class="ghost" data-ford="zurueckgezogen" data-id="${f.id}">Zurückziehen</button></div></div>`;
+    if (f.status === "angenommen") return `<div class="forderung"><p class="was">Verabredet mit ${escHtml(andere)}</p><p class="wann">${wann(f)}</p>
+      <div class="knoepfe"><button class="ghost" data-ford="abgesagt" data-id="${f.id}">Absagen</button></div></div>`;
+    const was = f.status === "abgelehnt" ? `${escHtml(andere)} hat abgelehnt` : f.status === "zurueckgezogen" ? `${escHtml(nameOf(f.von))} hat zurückgezogen` : `Abgesagt`;
+    return `<div class="forderung"><p class="was">${was}</p><p class="wann">${wann(f)}</p>
+      <div class="knoepfe"><button class="ghost" data-ford-weg="${f.id}">Ausblenden</button></div></div>`;
+  }).join("");
+  const offen = meine.filter(f => f.an === mich && f.status === "offen").length;
+  const z = $("ligaZaehler");
+  if (z){ z.textContent = offen; z.classList.toggle("hidden", offen === 0); }
+}
+
+function fordernFormular(){
+  const wen = $("fordWen");
+  if (!wen) return;
+  const mich = ich();
+  const alt = { wen: wen.value, tag: $("fordTag").value, ort: $("fordOrt").value };
+  wen.innerHTML = players.filter(p => p.id !== mich).sort((a,b) => a.name.localeCompare(b.name))
+    .map(p => `<option value="${p.id}">${escHtml(p.name)}</option>`).join("");
+  $("fordTag").innerHTML = [0,1,2,3,4,5,6].map(i => { const d = tagIso(i); return `<option value="${d}">${escHtml(tagText(d))}${i > 1 ? "" : " (" + new Date(d + "T12:00:00").toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit" }) + ")"}</option>`; }).join("");
+  $("fordOrt").innerHTML = orte.length ? orte.map(o => `<option value="${o.id}">${escHtml(o.name)}</option>`).join("")
+                                       : `<option value="">Noch kein Ort angelegt</option>`;
+  if (alt.wen) wen.value = alt.wen;
+  if (alt.tag) $("fordTag").value = alt.tag;
+  if (alt.ort) $("fordOrt").value = alt.ort;
+  const bereit = !!mich && orte.length > 0 && players.length > 1;
+  $("fordSenden").disabled = !bereit;
+  $("fordHinweis").textContent = !mich ? "Zum Herausfordern muss dieses Gerät einer Person zugeordnet sein (Extras → Einstellungen)."
+    : !orte.length ? "Lege zuerst unter Extras → Einstellungen einen Ort an." : "";
+}
+
+async function fordern(){
+  const mich = ich();
+  const zeile = { von: mich, an: $("fordWen").value, tag: $("fordTag").value, zeit: $("fordZeit").value, ort: $("fordOrt").value || null, status: "offen" };
+  if (!mich || !zeile.an || !zeile.ort) return;
+  try {
+    const r = await withTimeout(db.from("herausforderungen").insert(zeile).select());
+    if (r && r.error) throw new Error(r.error.message);
+    const f = (r && r.data && r.data[0]) || { ...zeile, id: "lokal" + Date.now(), created_at: new Date().toISOString() };
+    forderungEingang(f);
+    benachrichtigen(zeile.an, "Herausforderung!", `${nameOf(mich)} fordert dich heraus: ${tagText(zeile.tag)}, ${TAGESZEIT[zeile.zeit]}, ${ortName(zeile.ort)}`,
+      "herausforderung:" + f.id, "herausforderung");
+    $("fordHinweis").textContent = `Herausforderung an ${nameOf(zeile.an)} verschickt.`;
+    $("fordernPanel").open = false;
+  } catch (e) {
+    $("fordHinweis").textContent = "Das hat nicht geklappt: " + (e && e.message || e);
+  }
+}
+
+async function forderungAntworten(id, status){
+  const f = forderungen.find(x => x.id === id), mich = ich();
+  if (!f || !mich) return;
+  if (status === "abgesagt" || status === "zurueckgezogen" || status === "abgelehnt"){
+    const frage = status === "abgelehnt" ? "Herausforderung ablehnen?" : status === "zurueckgezogen" ? "Herausforderung zurückziehen?" : "Verabredung absagen?";
+    const ok = await dialog(frage, `${tagText(f.tag)}, ${TAGESZEIT[f.zeit]}, ${ortName(f.ort)}.`,
+      [{ text: "Ja", wert: true, art: "gefahr" }, { text: "Doch nicht", wert: false, art: "leise" }]);
+    if (!ok) return;
+  }
+  try {
+    const r = await withTimeout(db.from("herausforderungen").update({ status, updated_at: new Date().toISOString() }).eq("id", id));
+    if (r && r.error) throw new Error(r.error.message);
+  } catch (e) { return; }
+  forderungEingang({ ...f, status });
+  const andere = f.von === mich ? f.an : f.von, wann = `${tagText(f.tag)}, ${TAGESZEIT[f.zeit]}, ${ortName(f.ort)}`;
+  const texte = {
+    angenommen:     ["Herausforderung angenommen", `${nameOf(mich)} ist dabei: ${wann}`],
+    abgelehnt:      ["Herausforderung abgelehnt",  `${nameOf(mich)} kann nicht: ${wann}`],
+    zurueckgezogen: ["Herausforderung zurückgezogen", `${nameOf(mich)} hat zurückgezogen: ${wann}`],
+    abgesagt:       ["Verabredung abgesagt",       `${nameOf(mich)} hat abgesagt: ${wann}`],
+  };
+  if (texte[status]) benachrichtigen(andere, texte[status][0], texte[status][1], "herausforderung:" + id, "herausforderung");
+}
+
+// ---------- Einstellungen ----------
+function einstellungenZeigen(){
+  const mich = ich();
+  const wer = $("werText");
+  if (!wer) return;
+  if (mich) wer.innerHTML = `Dieses Gerät gehört <strong>${escHtml(nameOf(mich))}</strong>.`;
+  else if (!geraeteZuordnung) wer.textContent = "Die feste Zuordnung ist noch nicht eingerichtet (Tabelle „geraete“ fehlt).";
+  else {
+    const k = zuordnungsKandidaten();
+    wer.innerHTML = k.length ? `Dieses Gerät ist noch niemandem zugeordnet. <button class="ghost" data-wer-waehlen="1" style="margin-top:8px;width:100%;padding:9px">Jetzt auswählen</button>`
+                             : "Dieses Gerät ist noch niemandem zugeordnet. Sobald hier eine Partie eingetragen oder online gespielt wurde, kannst du dich auswählen.";
+  }
+  $("freigebenBtn").classList.toggle("hidden", !(mich && geraeteZuordnung));
+  $("freigebenHinweis").classList.toggle("hidden", !(mich && geraeteZuordnung));
+  pushAnzeigen();
+  const meine = (mich && praefs[mich]) || {};
+  document.querySelectorAll("#pushArten input[data-art]").forEach(box => {
+    box.checked = meine[box.dataset.art] !== false;
+    box.disabled = !mich;
+  });
+  $("pushArtenHinweis").textContent = mich ? "Gilt für alle deine Geräte." : "Erst nach der Zuordnung einstellbar.";
+  orteZeigen();
+}
+
+async function artenSpeichern(){
+  const mich = ich();
+  if (!mich) return;
+  const b = {};
+  document.querySelectorAll("#pushArten input[data-art]").forEach(box => { b[box.dataset.art] = box.checked; });
+  praefs[mich] = b;
+  try {
+    const r = await withTimeout(db.from("einstellungen").upsert({ spieler: mich, benachrichtigungen: b, updated_at: new Date().toISOString() }));
+    $("pushArtenHinweis").textContent = r && r.error ? "Speichern fehlgeschlagen: " + r.error.message : "Gespeichert — gilt für alle deine Geräte.";
+  } catch (e) { $("pushArtenHinweis").textContent = "Speichern fehlgeschlagen."; }
+}
+
+function orteZeigen(){
+  const box = $("orteListe");
+  if (!box) return;
+  box.innerHTML = orte.length ? orte.map(o => `<div class="ortzeile"><input data-ort-id="${o.id}" value="${escHtml(o.name)}" maxlength="60" />
+      <button class="ghost" data-ort-weg="${o.id}" aria-label="Ort löschen">✕</button></div>`).join("")
+    : `<p class="empty">Noch keine Orte.</p>`;
+}
+
+async function ortHinzufuegen(){
+  const name = $("ortName").value.trim();
+  if (!name) return;
+  try {
+    const r = await withTimeout(db.from("orte").insert({ name }).select());
+    if (r && r.error) throw new Error(r.error.message);
+    orte.push((r && r.data && r.data[0]) || { id: "lokal" + Date.now(), name });
+    orte.sort((a, b) => a.name.localeCompare(b.name));
+    $("ortName").value = "";
+    orteZeigen(); fordernFormular();
+  } catch (e) { alert("Ort anlegen hat nicht geklappt: " + (e && e.message || e)); }
+}
+
+async function ortUmbenennen(id, name){
+  name = name.trim();
+  const o = orte.find(x => x.id === id);
+  if (!o || !name || name === o.name) return;
+  try { await withTimeout(db.from("orte").update({ name }).eq("id", id)); o.name = name; fordernFormular(); forderungenZeigen(); } catch (e) {}
+}
+
+async function ortLoeschen(id){
+  const o = orte.find(x => x.id === id);
+  if (!o) return;
+  const ok = await dialog("Ort löschen?", `„${o.name}“ steht danach nicht mehr zur Auswahl.`,
+    [{ text: "Löschen", wert: true, art: "gefahr" }, { text: "Doch nicht", wert: false, art: "leise" }]);
+  if (!ok) return;
+  try { await withTimeout(db.from("orte").delete().eq("id", id)); } catch (e) { return; }
+  orte = orte.filter(x => x.id !== id);
+  orteZeigen(); fordernFormular();
+}
+
 // ---------- Würfel fürs echte Brett ----------
 let wuerfelJetzt = [null, null], wurfListe = [], wirdGewuerfelt = false, wachSperre = null;
 
@@ -3007,17 +3538,18 @@ async function pushAnzeigen(){
   const gespeichert = (() => { try { return localStorage.getItem("bgl-push-spieler"); } catch (e) { return null; } })();
   sel.innerHTML = `<option value="">Person wählen</option>` + players.map(p => `<option value="${p.id}"></option>`).join("");
   [...sel.options].slice(1).forEach((o, i) => o.textContent = players[i].name);
-  sel.value = gespeichert || mich || "";
+  sel.value = mich || gespeichert || "";
+  if (mich) feld.classList.add("hidden");
 
   if (abo && Notification.permission === "granted"){
     const wer = gespeichert ? nameOf(gespeichert) : "dieses Gerät";
-    return zeig(`Eingeschaltet für ${wer}. Du bekommst eine Nachricht, sobald du in einer Partie dran bist.`, false, false, true);
+    return zeig(`Eingeschaltet für ${wer} auf diesem Gerät.`, false, false, true);
   }
-  zeig("Lass dich benachrichtigen, sobald du in einer Partie dran bist — auch wenn die App geschlossen ist.", true, true, false);
+  zeig("Lass dich benachrichtigen, auch wenn die App geschlossen ist.", !mich, true, false);
 }
 
 async function pushEinschalten(){
-  const wer = $("pushWer").value;
+  const wer = ich() || $("pushWer").value;
   const melde = (t) => { $("pushText").textContent = t; };
   if (!wer){ melde("Bitte erst auswählen, wer du bist."); return; }
   melde("Wird eingeschaltet …");
@@ -3106,8 +3638,14 @@ async function pushTesten(){
 }
 
 // Nachricht an eine Person schicken (läuft über die Supabase-Funktion "benachrichtigen")
-function benachrichtigen(spielerId, titel, text, spielId){
+async function benachrichtigen(spielerId, titel, text, spielId, art = "dran"){
   if (!spielerId || !db.functions) return;
+  // Möchte die Person diese Art von Nachricht überhaupt?
+  try {
+    const r = await withTimeout(db.from("einstellungen").select("benachrichtigungen").eq("spieler", spielerId));
+    const b = r && !r.error && r.data && r.data[0] && r.data[0].benachrichtigungen;
+    if (b && b[art] === false) return;
+  } catch (e) {}
   try {
     db.functions.invoke(PUSH_FUNKTION, { body: { spieler: spielerId, titel, text, spiel: spielId || null } })
       .catch(() => {});
@@ -3584,22 +4122,28 @@ function zeigeAnsicht(name, ausVerlauf, spielId){
     const gleich = jetzt.ansicht === name && (name !== "boardView" || jetzt.spiel === spielId);
     if (!gleich) history.pushState({ ansicht: name, spiel: spielId || null }, "");
   }
-  ["mainView","statsView","gamesView","boardView","diceView"].forEach(v => {
+  ["mainView","statsView","gamesView","boardView","diceView","chatView","settingsView"].forEach(v => {
     const el = $(v);
     if (el) el.classList.toggle("hidden", v !== name);
   });
-  const reiter = name === "boardView" ? "gamesView" : name;
+  const EXTRAS = ["statsView", "diceView", "settingsView"];
+  if (EXTRAS.includes(name)) letzteExtra = name;
+  const reiter = name === "boardView" ? "gamesView" : EXTRAS.includes(name) ? "extras" : name;
   const KOPF = {
-    mainView:  ["– Liga",      "Sieg 1 · Gammon 2 · Backgammon 3"],
-    statsView: ["– Statistik", "Wer wann vorn lag und warum"],
-    gamesView: ["– Spielen",   "Gegeneinander oder gegen den Computer"],
-    boardView: ["– Spielen",   aktuellesSpiel && aktuellesSpiel.training ? "Training" : "Partie"],
-    diceView:  ["– Würfel",    "Fürs echte Brett"],
+    mainView:     ["– Liga",    "Sieg 1 · Gammon 2 · Backgammon 3"],
+    gamesView:    ["– Spielen", "Gegeneinander oder gegen den Computer"],
+    boardView:    ["– Spielen", aktuellesSpiel && aktuellesSpiel.training ? "Training" : "Partie"],
+    chatView:     ["– Chat",    "Gruppe und private Nachrichten"],
+    statsView:    ["– Extras",  "Statistik: wer wann vorn lag und warum"],
+    diceView:     ["– Extras",  "Würfeln fürs echte Brett"],
+    settingsView: ["– Extras",  "Einstellungen"],
   };
   const [bereich, zeile] = KOPF[name] || KOPF.mainView;
   $("kopfBereich").textContent = bereich;
   $("kopfText").textContent = zeile;
   document.querySelectorAll(".tab").forEach(b => b.classList.toggle("aktiv", b.dataset.view === reiter));
+  $("unterNav").classList.toggle("hidden", !EXTRAS.includes(name));
+  document.querySelectorAll("#unterNav [data-unter]").forEach(b => b.classList.toggle("aktiv", b.dataset.unter === name));
   if (name !== "boardView"){
     kanalSchliessen();
     if (aktuellesSpiel && aktuellesSpiel.training) aktuellesSpiel = null;
@@ -3607,30 +4151,39 @@ function zeigeAnsicht(name, ausVerlauf, spielId){
   if (name === "statsView") renderStats();
   wachHalten(name === "diceView");
   if (name === "diceView") wuerfelZeichnen();
-  if (name === "gamesView"){ renderGames(); trainingSuchen(); pushAnzeigen(); }
+  if (name === "gamesView"){ renderGames(); trainingSuchen(); }
+  if (name === "chatView") nachrichtenZeigen();
+  if (name === "settingsView") einstellungenZeigen();
+  if (name === "mainView"){ forderungenZeigen(); fordernFormular(); }
   window.scrollTo(0, 0);
 }
 
 document.querySelectorAll(".tab").forEach(b => {
   b.onclick = async () => {
-    const ziel = b.dataset.view;
+    let ziel = b.dataset.view;
+    if (ziel === "extras") ziel = letzteExtra;
     if (ziel === "gamesView") await spieleLaden();
     zeigeAnsicht(ziel);
   };
 });
+document.querySelectorAll("#unterNav [data-unter]").forEach(b => { b.onclick = () => zeigeAnsicht(b.dataset.unter); });
 
 // Reiter per Wischen wechseln (nicht auf dem Spielbrett, nicht in Eingabefeldern, nicht am Bildschirmrand)
 (function wischen(){
-  const REIHE = ["mainView", "statsView", "gamesView", "diceView"];
+  const REIHE = ["mainView", "gamesView", "chatView", "extras"];
+  const EXTRAS = ["statsView", "diceView", "settingsView"];
   let start = null;
-  const aktuell = () => REIHE.find(v => !$(v).classList.contains("hidden"));
+  const aktuell = () => {
+    if (EXTRAS.some(v => !$(v).classList.contains("hidden"))) return "extras";
+    return REIHE.find(v => v !== "extras" && !$(v).classList.contains("hidden"));
+  };
   document.addEventListener("touchstart", (e) => {
     const t = e.touches && e.touches[0];
     if (!t || e.touches.length > 1){ start = null; return; }
     const ziel = e.target;
     const gesperrt = !aktuell()
       || !$("dialog").classList.contains("hidden")
-      || (ziel.closest && ziel.closest("input, select, textarea, #board, .stattab, [data-kein-wischen]"));
+      || (ziel.closest && ziel.closest("input, select, textarea, #board, .stattab, .konvleiste, .nachrichtenliste, [data-kein-wischen]"));
     const rand = t.clientX < 24 || t.clientX > window.innerWidth - 24;
     start = (gesperrt || rand) ? null : { x: t.clientX, y: t.clientY, zeit: Date.now() };
   }, { passive: true });
@@ -3645,7 +4198,7 @@ document.querySelectorAll(".tab").forEach(b => {
     const jetzt = aktuell();
     const i = REIHE.indexOf(jetzt) + (dx < 0 ? 1 : -1);
     if (i < 0 || i >= REIHE.length) return;
-    const ziel = REIHE[i];
+    const ziel = REIHE[i] === "extras" ? letzteExtra : REIHE[i];
     if (ziel === "gamesView") await spieleLaden();
     zeigeAnsicht(ziel);
     const el = $(ziel);
@@ -3692,7 +4245,7 @@ $("startGame").onclick = async () => {
     sitzSetzen(g.id, hell === a ? 1 : 2);
     zeig("");
     renderGames();
-    benachrichtigen(b, "Neue Partie", `${nameOf(a)} fordert dich heraus. Wirf deinen Eröffnungswürfel.`, g.id);
+    benachrichtigen(b, "Neue Partie", `${nameOf(a)} fordert dich heraus. Wirf deinen Eröffnungswürfel.`, g.id, "herausforderung");
   } catch (e) { zeig(e.message); }
 };
 $("rollBtn").onclick = async () => {
@@ -3734,6 +4287,29 @@ $("undoBtn").onclick = async () => {
 };
 $("endBtn").onclick = zugAbschliessen;
 $("startTraining").onclick = trainingStarten;
+$("nachrichtSenden").onclick = nachrichtSenden;
+$("nachrichtText").addEventListener("keydown", (e) => { if (e.key === "Enter"){ e.preventDefault(); nachrichtSenden(); } });
+$("fordSenden").onclick = fordern;
+$("freigebenBtn").onclick = freigeben;
+$("ortHinzu").onclick = ortHinzufuegen;
+$("ortName").addEventListener("keydown", (e) => { if (e.key === "Enter"){ e.preventDefault(); ortHinzufuegen(); } });
+document.querySelectorAll("#pushArten input[data-art]").forEach(box => box.onchange = artenSpeichern);
+document.addEventListener("change", (e) => { const id = e.target.dataset && e.target.dataset.ortId; if (id) ortUmbenennen(id, e.target.value); });
+document.addEventListener("click", async (e) => {
+  const d = e.target.closest ? e.target.closest("[data-konv],[data-ford],[data-ford-weg],[data-wer-waehlen],[data-ort-weg]") : null;
+  if (!d) return;
+  if (d.dataset.konv){ chatKonv = d.dataset.konv; nachrichtenZeigen(); return; }
+  if (d.dataset.ford){ forderungAntworten(d.dataset.id, d.dataset.ford); return; }
+  if (d.dataset.fordWeg){
+    let weg = []; try { weg = JSON.parse(localStorage.getItem("bgl-forderung-weg") || "[]"); } catch (err) {}
+    weg.push(d.dataset.fordWeg); try { localStorage.setItem("bgl-forderung-weg", JSON.stringify(weg.slice(-100))); } catch (err) {}
+    forderungenZeigen(); return;
+  }
+  if (d.dataset.werWaehlen){ zuordnungGefragt = false; zuordnungFreigegeben = false; await zuordnungPruefen(); einstellungenZeigen(); return; }
+  if (d.dataset.ortWeg){ ortLoeschen(d.dataset.ortWeg); return; }
+});
+document.addEventListener("visibilitychange", () => { if (!document.hidden && chatOffen()) nachrichtenZeigen(); });
+setInterval(async () => { if (ligaGeladen && !document.hidden){ await nebendatenLaden(); forderungenZeigen(); nachrichtenZeigen(); } }, 30000);
 $("wurfBtn").onclick = normalWuerfeln;
 $("wuerfelFeld").addEventListener("click", normalWuerfeln);
 $("eroeffnungBtn").onclick = eroeffnungWuerfelnEcht;
