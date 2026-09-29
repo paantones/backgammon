@@ -77,6 +77,7 @@ h1{font-family:'Fraunces',Georgia,serif;font-weight:800;font-size:clamp(30px,7vw
 .nachrichtenliste{display:flex;flex-direction:column;gap:8px;max-height:55vh;overflow-y:auto;padding:8px 2px}
 .nachricht{max-width:80%;padding:7px 11px;border-radius:14px;background:var(--pearl);border:1px solid var(--line);align-self:flex-start}
 .nachricht.meine{align-self:flex-end;background:var(--horn);color:var(--pearl);border-color:var(--horn)}
+.nachricht.imspiel{cursor:pointer;border-style:dashed}
 .nachricht small{display:block;font-family:'IBM Plex Mono',monospace;font-size:10px;opacity:.7;margin-bottom:2px}
 .chateingabe{display:flex;gap:8px;margin-top:10px}
 .chateingabe input{flex:1;min-width:0}
@@ -137,6 +138,9 @@ h1{font-family:'Fraunces',Georgia,serif;font-weight:800;font-size:clamp(30px,7vw
 .dialoginhalt{padding:10px 22px 22px}
 .dialogtext{margin:0 0 16px;font-size:15px;line-height:1.5;color:var(--ink-soft)}
 .dialogknoepfe{display:flex;flex-direction:column;gap:10px}
+.dialogfelder .field{margin-bottom:12px}
+.dialogfelder:empty{display:none}
+.pname.antippbar{cursor:pointer;text-decoration:underline;text-decoration-color:rgba(122,82,49,.45);text-underline-offset:3px}
 .wahl{display:flex;align-items:center;gap:12px;width:100%;text-align:left;background:var(--field);
   border:1px solid rgba(122,82,49,.35);border-radius:8px;padding:13px 14px;cursor:pointer;
   font-family:'Fraunces',Georgia,serif;font-size:18px;color:var(--ink);transition:background .12s,transform .08s}
@@ -147,6 +151,8 @@ h1{font-family:'Fraunces',Georgia,serif;font-weight:800;font-size:clamp(30px,7vw
 .wahl .stein.dunkel{background:var(--horn)}
 .wahl.gefahr{background:#8C3226;color:var(--pearl);border-color:#6E2519;justify-content:center;font-family:'IBM Plex Sans',sans-serif;font-size:16px;font-weight:600}
 .wahl.gefahr:hover{background:#A33B2D}
+.wahl.haupt{background:var(--horn);color:var(--pearl);border-color:var(--horn);justify-content:center;font-family:'IBM Plex Sans',sans-serif;font-size:16px;font-weight:600}
+.wahl.haupt:hover{background:#3A2C22}
 .leise{background:none;border:none;color:var(--ink-soft);font-family:'IBM Plex Mono',monospace;font-size:12px;
   letter-spacing:.1em;text-transform:uppercase;padding:10px;cursor:pointer}
 .leise:hover{color:var(--ink)}
@@ -1516,8 +1522,17 @@ function render(){
           ${p.w+p.l === 0 ? `<button class="ghost" data-delp="${p.id}">löschen</button>` : ``}
         </div>
       </div>`).join("");
-  // Namen sicher einsetzen (kein HTML aus Eingaben)
-  $("table").querySelectorAll(".pname").forEach((el,i) => el.textContent = rows[i].name);
+  // Namen sicher einsetzen (kein HTML aus Eingaben); andere Personen sind antippbar zum Herausfordern
+  const ichSelbst = ich();
+  $("table").querySelectorAll(".pname").forEach((el,i) => {
+    el.textContent = rows[i].name;
+    if (ichSelbst && rows[i].id !== ichSelbst){
+      el.dataset.fordere = rows[i].id;
+      el.classList.add("antippbar");
+      el.setAttribute("role", "button");
+      el.title = rows[i].name + " herausfordern";
+    }
+  });
 
   const mich = ich();
   const ziel = mich ? (viewing || mich) : null;
@@ -3055,11 +3070,13 @@ async function zugAbschliessen(){
 let dialogSchliessen = null, ignoriereZurueck = false;
 
 // Einheitlicher Dialog. knoepfe: [{ text, wert, art: "hell" | "dunkel" | "gefahr" | "leise" }]
-function dialog(titel, text, knoepfe){
+function dialog(titel, text, knoepfe, felderHtml){
   return new Promise(fertig => {
     const d = $("dialog");
     $("dlgTitel").textContent = titel;
     $("dlgText").textContent = text;
+    $("dlgText").classList.toggle("hidden", !text);
+    $("dlgFelder").innerHTML = felderHtml || "";
     const z = $("dlgZacken");
     if (!z.dataset.fertig){
       const N = 12, W = 360 / N;
@@ -3088,7 +3105,7 @@ function dialog(titel, text, knoepfe){
     };
     knoepfe.forEach(k => {
       const b = document.createElement("button");
-      b.className = k.art === "leise" ? "leise" : "wahl" + (k.art === "gefahr" ? " gefahr" : "");
+      b.className = k.art === "leise" ? "leise" : "wahl" + (k.art === "gefahr" ? " gefahr" : k.art === "haupt" ? " haupt" : "");
       if (k.art === "hell" || k.art === "dunkel"){
         const stein = document.createElement("span");
         stein.className = "stein " + k.art;
@@ -3107,7 +3124,7 @@ function dialog(titel, text, knoepfe){
 }
 
 // ================= Gruppenchat, Herausforderungen, Einstellungen =================
-let orte = [], forderungen = [], nachrichten = [], praefs = {};
+let orte = [], forderungen = [], nachrichten = [], praefs = {}, spielChats = [];
 let chatKonv = "gruppe", letzteExtra = "statsView", echtzeitGlobal = null;
 const ARTEN = ["herausforderung", "dran", "gruppe", "privat"];
 const TAGESZEIT = { vormittag: "vormittags", nachmittag: "nachmittags", abend: "abends" };
@@ -3138,6 +3155,8 @@ async function nebendatenLaden(){
   if (f) forderungen = f;
   const n = await holen("nachrichten", t => t.select("*").order("created_at", { ascending: true }).limit(1500));
   if (n) nachrichten = n;
+  const c = await holen("chat", t => t.select("*").order("created_at", { ascending: true }).limit(3000));
+  if (c) spielChats = c;
   const e = await holen("einstellungen", t => t.select("*"));
   if (e){ praefs = {}; e.forEach(x => { praefs[x.spieler] = x.benachrichtigungen || {}; }); }
   try { if (!localStorage.getItem("bgl-gelesen-start")) localStorage.setItem("bgl-gelesen-start", String(Date.now())); } catch (err) {}
@@ -3149,6 +3168,7 @@ function echtzeitGlobalStarten(){
   try {
     echtzeitGlobal = db.channel("bx-global")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "nachrichten" }, (p) => nachrichtEingang(p.new))
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "chat" }, (p) => spielChatEingang(p.new))
       .on("postgres_changes", { event: "*", schema: "public", table: "herausforderungen" }, (p) => forderungEingang(p.new))
       .subscribe();
   } catch (e) {}
@@ -3172,6 +3192,37 @@ function ungelesen(k){
 }
 function chatOffen(){ return !$("chatView").classList.contains("hidden") && !document.hidden; }
 
+// Chat aus einer Partie gehört zur privaten Unterhaltung mit der Gegenseite
+function spielChatZuordnen(z){
+  const mich = ich();
+  const g = games.find(x => x.id === z.game);
+  if (!mich || !g || (z.sitz !== 1 && z.sitz !== 2)) return null;
+  const von = z.sitz === 1 ? g.p1 : g.p2, gegen = z.sitz === 1 ? g.p2 : g.p1;
+  if (von !== mich && gegen !== mich) return null;
+  return { konv: von === mich ? gegen : von, von, spiel: g.id };
+}
+
+// Alle Einträge einer Unterhaltung, zeitlich sortiert
+function konvEintraege(k){
+  const liste = nachrichten.filter(n => konvVon(n) === k).map(n => ({ zeit: n.created_at, von: n.von, text: n.text }));
+  if (k !== "gruppe") spielChats.forEach(z => {
+    const x = spielChatZuordnen(z);
+    if (x && x.konv === k) liste.push({ zeit: z.created_at, von: x.von, text: z.text, spiel: x.spiel });
+  });
+  return liste.sort((a, b) => new Date(a.zeit) - new Date(b.zeit));
+}
+
+function letzteZeit(k){
+  const e = konvEintraege(k);
+  return e.length ? new Date(e[e.length - 1].zeit).getTime() : 0;
+}
+
+function spielChatEingang(z){
+  if (!z || !z.id || spielChats.some(x => x.id === z.id)) return;
+  spielChats.push(z);
+  nachrichtenZeigen();
+}
+
 function chatZaehlerSetzen(){
   const mich = ich();
   const konvs = ["gruppe"].concat(mich ? players.filter(p => p.id !== mich).map(p => p.id) : []);
@@ -3184,15 +3235,17 @@ function nachrichtenZeigen(){
   if ($("chatView").classList.contains("hidden")){ chatZaehlerSetzen(); return; }
   const mich = ich();
   if (!mich) chatKonv = "gruppe";
-  const konvs = ["gruppe"].concat(mich ? players.filter(p => p.id !== mich).sort((a,b) => a.name.localeCompare(b.name)).map(p => p.id) : []);
+  const personen = mich ? players.filter(p => p.id !== mich).map(p => ({ id: p.id, name: p.name, zeit: letzteZeit(p.id) })) : [];
+  personen.sort((a, b) => b.zeit - a.zeit || a.name.localeCompare(b.name));
+  const konvs = ["gruppe"].concat(personen.map(p => p.id));
   $("konvLeiste").innerHTML = konvs.map(k => {
     const neu = k === chatKonv ? 0 : ungelesen(k);
     return `<button data-konv="${escHtml(k)}" class="${k === chatKonv ? "aktiv" : ""}">${escHtml(k === "gruppe" ? "Gruppe" : nameOf(k))}${neu ? `<span class="neu">${neu}</span>` : ""}</button>`;
   }).join("");
-  const liste = nachrichten.filter(n => konvVon(n) === chatKonv);
+  const liste = konvEintraege(chatKonv);
   const box = $("nachrichtenListe");
   box.innerHTML = liste.length
-    ? liste.map(n => `<div class="nachricht ${n.von === mich ? "meine" : ""}"><small>${n.von === mich ? "du" : escHtml(nameOf(n.von))} · ${escHtml(zeitKurz(n.created_at))}</small>${escHtml(n.text)}</div>`).join("")
+    ? liste.map(n => `<div class="nachricht ${n.von === mich ? "meine" : ""} ${n.spiel ? "imspiel" : ""}" ${n.spiel ? `data-zum-spiel="${escHtml(n.spiel)}" role="button"` : ""}><small>${n.von === mich ? "du" : escHtml(nameOf(n.von))} · ${n.spiel ? "im Spiel · " : ""}${escHtml(zeitKurz(n.zeit))}</small>${escHtml(n.text)}</div>`).join("")
     : `<p class="empty">${chatKonv === "gruppe" ? "Noch keine Gruppennachrichten." : "Noch keine Nachrichten mit " + escHtml(nameOf(chatKonv)) + "."}</p>`;
   box.scrollTop = box.scrollHeight;
   if (!document.hidden){ try { localStorage.setItem("bgl-gelesen-" + chatKonv, String(Date.now())); } catch (e) {} }
@@ -3223,7 +3276,10 @@ async function nachrichtSenden(){
     if (r && r.data && r.data[0]) nachrichtEingang(r.data[0]);
   } catch (e) {
     feld.value = text;
-    $("chatHinweis").textContent = "Senden hat nicht geklappt: " + (e && e.message || e);
+    const m = String(e && e.message || e);
+    $("chatHinweis").textContent = /schema cache|does not exist/i.test(m)
+      ? "Die Tabelle für Nachrichten fehlt noch in der Datenbank — bitte das SQL für den Umbau ausführen."
+      : "Senden hat nicht geklappt: " + m;
     return;
   }
   if (zeile.an) benachrichtigen(zeile.an, `Nachricht von ${nameOf(mich)}`, text, "nachricht:" + mich, "privat");
@@ -3300,8 +3356,41 @@ async function fordern(){
     $("fordHinweis").textContent = `Herausforderung an ${nameOf(zeile.an)} verschickt.`;
     $("fordernPanel").open = false;
   } catch (e) {
-    $("fordHinweis").textContent = "Das hat nicht geklappt: " + (e && e.message || e);
+    const m = String(e && e.message || e);
+    $("fordHinweis").textContent = /schema cache|does not exist/i.test(m)
+      ? "Die Tabelle für Herausforderungen fehlt noch in der Datenbank — bitte das SQL für den Umbau ausführen."
+      : "Das hat nicht geklappt: " + m;
   }
+}
+
+// Herausfordern direkt aus der Tabelle: Fenster mit Tag, Tageszeit und Ort
+async function forderDialog(anId){
+  const mich = ich();
+  if (!mich || !anId || anId === mich) return;
+  if (!orte.length){
+    const weiter = await dialog(`${nameOf(anId)} herausfordern`, "Es gibt noch keinen Ort. Lege zuerst unter Extras → Einstellungen einen an.",
+      [{ text: "Zu den Einstellungen", wert: true, art: "haupt" }, { text: "Abbrechen", wert: false, art: "leise" }]);
+    if (weiter) zeigeAnsicht("settingsView");
+    return;
+  }
+  const tage = [0,1,2,3,4,5,6].map(i => { const d = tagIso(i);
+    return `<option value="${d}">${escHtml(tagText(d))}${i > 1 ? "" : " (" + new Date(d + "T12:00:00").toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit" }) + ")"}</option>`; }).join("");
+  const felder = `
+    <div class="field"><label for="dlgTag">Wann?</label><select id="dlgTag">${tage}</select></div>
+    <div class="field"><label for="dlgZeit">Tageszeit</label><select id="dlgZeit">
+      <option value="vormittag">Vormittag</option><option value="nachmittag">Nachmittag</option><option value="abend" selected>Abend</option></select></div>
+    <div class="field"><label for="dlgOrt">Wo?</label><select id="dlgOrt">${orte.map(o => `<option value="${o.id}">${escHtml(o.name)}</option>`).join("")}</select></div>`;
+  const ok = await dialog(`${nameOf(anId)} herausfordern`, "", [
+    { text: "Herausfordern", wert: true, art: "haupt" }, { text: "Abbrechen", wert: false, art: "leise" }], felder);
+  if (!ok) return;
+  // Werte ins Formular übernehmen und über denselben Weg abschicken
+  $("fordWen").value = anId;
+  $("fordTag").value = $("dlgTag").value;
+  $("fordZeit").value = $("dlgZeit").value;
+  $("fordOrt").value = $("dlgOrt").value;
+  await fordern();
+  const antwort = $("fordHinweis").textContent;
+  dialog(/verschickt/.test(antwort) ? "Herausforderung verschickt" : "Das hat nicht geklappt", antwort, [{ text: "OK", wert: true, art: "leise" }]);
 }
 
 async function forderungAntworten(id, status){
@@ -3382,7 +3471,14 @@ async function ortHinzufuegen(){
     orte.sort((a, b) => a.name.localeCompare(b.name));
     $("ortName").value = "";
     orteZeigen(); fordernFormular();
-  } catch (e) { alert("Ort anlegen hat nicht geklappt: " + (e && e.message || e)); }
+  } catch (e) {
+    const m = String(e && e.message || e);
+    const fehltTabelle = /schema cache|does not exist/i.test(m);
+    dialog("Ort anlegen hat nicht geklappt",
+      fehltTabelle ? "Die Tabelle für Orte fehlt noch in der Datenbank. Bitte das SQL für den Umbau in Supabase ausführen und die App danach neu öffnen."
+                   : m,
+      [{ text: "OK", wert: true, art: "leise" }]);
+  }
 }
 
 async function ortUmbenennen(id, name){
@@ -4296,8 +4392,15 @@ $("ortName").addEventListener("keydown", (e) => { if (e.key === "Enter"){ e.prev
 document.querySelectorAll("#pushArten input[data-art]").forEach(box => box.onchange = artenSpeichern);
 document.addEventListener("change", (e) => { const id = e.target.dataset && e.target.dataset.ortId; if (id) ortUmbenennen(id, e.target.value); });
 document.addEventListener("click", async (e) => {
-  const d = e.target.closest ? e.target.closest("[data-konv],[data-ford],[data-ford-weg],[data-wer-waehlen],[data-ort-weg]") : null;
+  const d = e.target.closest ? e.target.closest("[data-konv],[data-ford],[data-ford-weg],[data-wer-waehlen],[data-ort-weg],[data-fordere],[data-zum-spiel]") : null;
   if (!d) return;
+  if (d.dataset.zumSpiel){
+    if (!games.some(g => g.id === d.dataset.zumSpiel)) await spieleLaden();
+    const g = games.find(x => x.id === d.dataset.zumSpiel);
+    if (g) await spielOeffnen(g, { frage: g.status === "laufend" });
+    return;
+  }
+  if (d.dataset.fordere){ forderDialog(d.dataset.fordere); return; }
   if (d.dataset.konv){ chatKonv = d.dataset.konv; nachrichtenZeigen(); return; }
   if (d.dataset.ford){ forderungAntworten(d.dataset.id, d.dataset.ford); return; }
   if (d.dataset.fordWeg){
@@ -4370,6 +4473,7 @@ try { if (localStorage.getItem("bgl-pw") === PASSWORT) unlock(); } catch (e) { c
     <svg class="dialogzacken" id="dlgZacken" viewBox="0 0 360 22" preserveAspectRatio="none" aria-hidden="true"></svg>
     <div class="dialoginhalt">
       <p class="dialogtext" id="dlgText"></p>
+      <div class="dialogfelder" id="dlgFelder"></div>
       <div class="dialogknoepfe" id="dlgKnoepfe"></div>
     </div>
   </div>
