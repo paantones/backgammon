@@ -64,6 +64,16 @@ h1{font-family:'Fraunces',Georgia,serif;font-weight:800;font-size:clamp(30px,7vw
 #board{display:block;width:100%;height:auto;margin:4px 0 10px;touch-action:manipulation}
 .brettbox{position:relative}
 .zugleiste .btn{flex:1}
+.avatar{display:inline-flex;align-items:center;justify-content:center;flex:none;border-radius:50%;object-fit:cover;
+  border:1px solid #7A5231;background:var(--field);vertical-align:middle}
+.avatar.leer{background:#8A6039;color:var(--pearl);font-family:'Fraunces',Georgia,serif;font-weight:700;border-color:#5E4128}
+.namezeile{display:flex;align-items:center;gap:10px;min-width:0}
+.konvleiste .avatar{margin:-2px 6px -2px -4px}
+.nachricht small .avatar{margin-right:5px}
+.forderung .was .avatar{margin-right:8px}
+.bildzeile{display:flex;align-items:center;gap:16px}
+.bildzeile .knoepfe{display:flex;flex-direction:column;gap:8px;flex:1}
+.bildzeile label.btn{text-align:center;cursor:pointer}
 .unternav{display:flex;gap:6px;max-width:1080px;margin:-8px auto 14px;padding:0 18px}
 .unternav button{flex:1;background:var(--field);border:1px solid var(--line);border-radius:18px;padding:8px 6px;
   font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft);cursor:pointer}
@@ -457,6 +467,19 @@ ul.log li.edit .btn{width:auto;padding:9px 16px}
     </div>
 
     <div class="stack hidden" id="settingsView">
+      <div class="panel" id="bildPanel">
+        <p class="eyebrow">Profilbild</p>
+        <div class="bildzeile">
+          <span id="bildVorschau"></span>
+          <div class="knoepfe">
+            <label class="btn" id="bildWaehlen" for="bildDatei">Foto wählen</label>
+            <input type="file" id="bildDatei" accept="image/*" class="hidden" />
+            <button class="ghost hidden" id="bildWeg" style="padding:9px">Bild entfernen</button>
+          </div>
+        </div>
+        <p class="note" id="bildHinweis">Wird quadratisch zugeschnitten und klein gespeichert.</p>
+      </div>
+
       <div class="panel" id="werPanel">
         <p class="eyebrow">Dieses Gerät</p>
         <p id="werText" style="margin:0 0 12px"></p>
@@ -1513,9 +1536,12 @@ function render(){
           <circle cx="16" cy="16" r="15" fill="${(i+1)%2 ? '#F5EFE2' : '#1E1712'}" stroke="#7A5231" stroke-width="1"/>
           <text x="16" y="21" text-anchor="middle" font-family="'IBM Plex Mono',monospace" font-size="13" font-weight="600" fill="${(i+1)%2 ? '#21160E' : '#F2EADA'}">${i+1}</text>
         </svg>
-        <div>
-          <div class="pname"></div>
-          <div class="meta">${p.w} S · ${p.l} N · ${partien(p.w+p.l)}</div>
+        <div class="namezeile">
+          ${avatar(p.id, 34)}
+          <div style="min-width:0">
+            <div class="pname"></div>
+            <div class="meta">${p.w} S · ${p.l} N · ${partien(p.w+p.l)}</div>
+          </div>
         </div>
         <div style="display:flex;align-items:center;gap:10px">
           <span class="score">${p.pts}</span>
@@ -3123,6 +3149,66 @@ function dialog(titel, text, knoepfe, felderHtml){
   });
 }
 
+// ================= Profilbilder =================
+function avatar(id, groesse = 28){
+  const p = players.find(x => x.id === id);
+  const g = `width:${groesse}px;height:${groesse}px`;
+  if (p && typeof p.bild === "string" && p.bild.startsWith("data:image/"))
+    return `<img class="avatar" src="${p.bild}" style="${g}" alt="" loading="lazy">`;
+  const buchstabe = (p && p.name ? p.name.trim().charAt(0) : "?").toUpperCase();
+  return `<span class="avatar leer" style="${g};font-size:${Math.round(groesse * 0.48)}px" aria-hidden="true">${escHtml(buchstabe)}</span>`;
+}
+
+// Foto quadratisch zuschneiden und auf 144 × 144 Pixel verkleinern
+function bildVerkleinern(datei){
+  return new Promise((fertig, fehler) => {
+    const url = URL.createObjectURL(datei);
+    const img = new Image();
+    img.onload = () => {
+      const kante = Math.min(img.naturalWidth, img.naturalHeight);
+      const c = document.createElement("canvas");
+      c.width = c.height = 144;
+      const ctx = c.getContext("2d");
+      ctx.imageSmoothingQuality = "high";
+      ctx.drawImage(img, (img.naturalWidth - kante) / 2, (img.naturalHeight - kante) / 2, kante, kante, 0, 0, 144, 144);
+      URL.revokeObjectURL(url);
+      fertig(c.toDataURL("image/jpeg", 0.82));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); fehler(new Error("Das Bild ließ sich nicht öffnen.")); };
+    img.src = url;
+  });
+}
+
+async function bildSpeichern(bild){
+  const mich = ich();
+  if (!mich) return;
+  $("bildHinweis").textContent = "Wird gespeichert …";
+  try {
+    const r = await withTimeout(db.from("players").update({ bild }).eq("id", mich));
+    if (r && r.error) throw new Error(r.error.message);
+    const p = players.find(x => x.id === mich);
+    if (p) p.bild = bild;
+    $("bildHinweis").textContent = bild ? "Gespeichert." : "Entfernt.";
+    refresh();
+    einstellungenZeigen();
+  } catch (e) {
+    const m = String(e && e.message || e);
+    $("bildHinweis").textContent = /bild/.test(m) && /column|schema/i.test(m)
+      ? "In der Datenbank fehlt noch die Spalte für Bilder — bitte das SQL ausführen."
+      : "Speichern hat nicht geklappt: " + m;
+  }
+}
+
+function bildBereichZeigen(){
+  const mich = ich();
+  if (!$("bildPanel")) return;
+  $("bildVorschau").innerHTML = mich ? avatar(mich, 72) : "";
+  $("bildWaehlen").classList.toggle("hidden", !mich);
+  const p = players.find(x => x.id === mich);
+  $("bildWeg").classList.toggle("hidden", !(p && p.bild));
+  if (!mich) $("bildHinweis").textContent = "Erst nach der Zuordnung dieses Geräts möglich.";
+}
+
 // ================= Gruppenchat, Herausforderungen, Einstellungen =================
 let orte = [], forderungen = [], nachrichten = [], praefs = {}, spielChats = [];
 let chatKonv = "gruppe", letzteExtra = "statsView", echtzeitGlobal = null;
@@ -3240,12 +3326,12 @@ function nachrichtenZeigen(){
   const konvs = ["gruppe"].concat(personen.map(p => p.id));
   $("konvLeiste").innerHTML = konvs.map(k => {
     const neu = k === chatKonv ? 0 : ungelesen(k);
-    return `<button data-konv="${escHtml(k)}" class="${k === chatKonv ? "aktiv" : ""}">${escHtml(k === "gruppe" ? "Gruppe" : nameOf(k))}${neu ? `<span class="neu">${neu}</span>` : ""}</button>`;
+    return `<button data-konv="${escHtml(k)}" class="${k === chatKonv ? "aktiv" : ""}">${k === "gruppe" ? "" : avatar(k, 20)}${escHtml(k === "gruppe" ? "Gruppe" : nameOf(k))}${neu ? `<span class="neu">${neu}</span>` : ""}</button>`;
   }).join("");
   const liste = konvEintraege(chatKonv);
   const box = $("nachrichtenListe");
   box.innerHTML = liste.length
-    ? liste.map(n => `<div class="nachricht ${n.von === mich ? "meine" : ""} ${n.spiel ? "imspiel" : ""}" ${n.spiel ? `data-zum-spiel="${escHtml(n.spiel)}" role="button"` : ""}><small>${n.von === mich ? "du" : escHtml(nameOf(n.von))} · ${n.spiel ? "im Spiel · " : ""}${escHtml(zeitKurz(n.zeit))}</small>${escHtml(n.text)}</div>`).join("")
+    ? liste.map(n => `<div class="nachricht ${n.von === mich ? "meine" : ""} ${n.spiel ? "imspiel" : ""}" ${n.spiel ? `data-zum-spiel="${escHtml(n.spiel)}" role="button"` : ""}><small>${n.von === mich ? "du" : avatar(n.von, 16) + escHtml(nameOf(n.von))} · ${n.spiel ? "im Spiel · " : ""}${escHtml(zeitKurz(n.zeit))}</small>${escHtml(n.text)}</div>`).join("")
     : `<p class="empty">${chatKonv === "gruppe" ? "Noch keine Gruppennachrichten." : "Noch keine Nachrichten mit " + escHtml(nameOf(chatKonv)) + "."}</p>`;
   box.scrollTop = box.scrollHeight;
   if (!document.hidden){ try { localStorage.setItem("bgl-gelesen-" + chatKonv, String(Date.now())); } catch (e) {} }
@@ -3308,11 +3394,11 @@ function forderungenZeigen(){
   panel.classList.toggle("hidden", !meine.length);
   $("forderungListe").innerHTML = meine.map(f => {
     const andere = nameOf(f.von === mich ? f.an : f.von);
-    if (f.an === mich && f.status === "offen") return `<div class="forderung"><p class="was">${escHtml(andere)} fordert dich heraus!</p><p class="wann">${wann(f)}</p>
+    if (f.an === mich && f.status === "offen") return `<div class="forderung"><p class="was">${avatar(f.von === mich ? f.an : f.von, 28)}${escHtml(andere)} fordert dich heraus!</p><p class="wann">${wann(f)}</p>
       <div class="knoepfe"><button class="btn" data-ford="angenommen" data-id="${f.id}">Annehmen</button><button class="ghost" data-ford="abgelehnt" data-id="${f.id}">Ablehnen</button></div></div>`;
-    if (f.status === "offen") return `<div class="forderung"><p class="was">Du forderst ${escHtml(andere)} heraus</p><p class="wann">${wann(f)} — wartet auf Antwort</p>
+    if (f.status === "offen") return `<div class="forderung"><p class="was">${avatar(f.an, 28)}Du forderst ${escHtml(andere)} heraus</p><p class="wann">${wann(f)} — wartet auf Antwort</p>
       <div class="knoepfe"><button class="ghost" data-ford="zurueckgezogen" data-id="${f.id}">Zurückziehen</button></div></div>`;
-    if (f.status === "angenommen") return `<div class="forderung"><p class="was">Verabredet mit ${escHtml(andere)}</p><p class="wann">${wann(f)}</p>
+    if (f.status === "angenommen") return `<div class="forderung"><p class="was">${avatar(f.von === mich ? f.an : f.von, 28)}Verabredet mit ${escHtml(andere)}</p><p class="wann">${wann(f)}</p>
       <div class="knoepfe"><button class="ghost" data-ford="abgesagt" data-id="${f.id}">Absagen</button></div></div>`;
     const was = f.status === "abgelehnt" ? `${escHtml(andere)} hat abgelehnt` : f.status === "zurueckgezogen" ? `${escHtml(nameOf(f.von))} hat zurückgezogen` : `Abgesagt`;
     return `<div class="forderung"><p class="was">${was}</p><p class="wann">${wann(f)}</p>
@@ -3429,6 +3515,7 @@ function einstellungenZeigen(){
     wer.innerHTML = k.length ? `Dieses Gerät ist noch niemandem zugeordnet. <button class="ghost" data-wer-waehlen="1" style="margin-top:8px;width:100%;padding:9px">Jetzt auswählen</button>`
                              : "Dieses Gerät ist noch niemandem zugeordnet. Sobald hier eine Partie eingetragen oder online gespielt wurde, kannst du dich auswählen.";
   }
+  bildBereichZeigen();
   $("freigebenBtn").classList.toggle("hidden", !(mich && geraeteZuordnung));
   $("freigebenHinweis").classList.toggle("hidden", !(mich && geraeteZuordnung));
   pushAnzeigen();
@@ -4387,6 +4474,17 @@ $("nachrichtSenden").onclick = nachrichtSenden;
 $("nachrichtText").addEventListener("keydown", (e) => { if (e.key === "Enter"){ e.preventDefault(); nachrichtSenden(); } });
 $("fordSenden").onclick = fordern;
 $("freigebenBtn").onclick = freigeben;
+$("bildDatei").onchange = async (e) => {
+  const datei = e.target.files && e.target.files[0];
+  e.target.value = "";
+  if (!datei) return;
+  try { await bildSpeichern(await bildVerkleinern(datei)); }
+  catch (err) { $("bildHinweis").textContent = err.message || String(err); }
+};
+$("bildWeg").onclick = async () => {
+  const ok = await dialog("Profilbild entfernen?", "", [{ text: "Entfernen", wert: true, art: "gefahr" }, { text: "Doch nicht", wert: false, art: "leise" }]);
+  if (ok) bildSpeichern(null);
+};
 $("ortHinzu").onclick = ortHinzufuegen;
 $("ortName").addEventListener("keydown", (e) => { if (e.key === "Enter"){ e.preventDefault(); ortHinzufuegen(); } });
 document.querySelectorAll("#pushArten input[data-art]").forEach(box => box.onchange = artenSpeichern);
