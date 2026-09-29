@@ -150,6 +150,9 @@ h1{font-family:'Fraunces',Georgia,serif;font-weight:800;font-size:clamp(30px,7vw
 .dialogknoepfe{display:flex;flex-direction:column;gap:10px}
 .dialogfelder .field{margin-bottom:12px}
 .dialogfelder:empty{display:none}
+.row.antippbar{cursor:pointer;border-radius:8px;transition:background .12s}
+.row.antippbar:active{background:rgba(242,234,218,.5)}
+@media(hover:hover){.row.antippbar:hover{background:rgba(242,234,218,.35)}}
 .pname.antippbar{cursor:pointer;text-decoration:underline;text-decoration-color:rgba(122,82,49,.45);text-underline-offset:3px}
 .wahl{display:flex;align-items:center;gap:12px;width:100%;text-align:left;background:var(--field);
   border:1px solid rgba(122,82,49,.35);border-radius:8px;padding:13px 14px;cursor:pointer;
@@ -1550,14 +1553,15 @@ function render(){
       </div>`).join("");
   // Namen sicher einsetzen (kein HTML aus Eingaben); andere Personen sind antippbar zum Herausfordern
   const ichSelbst = ich();
-  $("table").querySelectorAll(".pname").forEach((el,i) => {
-    el.textContent = rows[i].name;
-    if (ichSelbst && rows[i].id !== ichSelbst){
-      el.dataset.fordere = rows[i].id;
-      el.classList.add("antippbar");
-      el.setAttribute("role", "button");
-      el.title = rows[i].name + " herausfordern";
-    }
+  $("table").querySelectorAll(".pname").forEach((el,i) => { el.textContent = rows[i].name; });
+  // Die ganze Zeile einer anderen Person öffnet das Herausfordern
+  $("table").querySelectorAll(".row").forEach((zeile,i) => {
+    if (!ichSelbst || rows[i].id === ichSelbst) return;
+    zeile.dataset.fordere = rows[i].id;
+    zeile.classList.add("antippbar");
+    zeile.setAttribute("role", "button");
+    zeile.title = rows[i].name + " herausfordern";
+    zeile.querySelector(".pname").classList.add("antippbar");
   });
 
   const mich = ich();
@@ -4291,6 +4295,9 @@ document.addEventListener("click", async (e) => {
     matches = matches.filter(x => x.id !== dm); refresh();
   }
   if (dp){
+    const ok = await dialog(`${nameOf(dp)} löschen?`, "Die Person verschwindet aus der Liga. Das geht nur, solange sie noch keine Partie gespielt hat.",
+      [{ text: "Ja, löschen", wert: true, art: "gefahr" }, { text: "Doch nicht", wert: false, art: "leise" }]);
+    if (!ok) return;
     let error;
     try { ({ error } = await withTimeout(db.from("players").delete().eq("id", dp))); }
     catch (err) { return say(err.message); }
@@ -4498,7 +4505,10 @@ document.addEventListener("click", async (e) => {
     if (g) await spielOeffnen(g, { frage: g.status === "laufend" });
     return;
   }
-  if (d.dataset.fordere){ forderDialog(d.dataset.fordere); return; }
+  if (d.dataset.fordere){
+    if (e.target.closest("button, [data-delp]")) return;      // z. B. „löschen“ in der Zeile
+    forderDialog(d.dataset.fordere); return;
+  }
   if (d.dataset.konv){ chatKonv = d.dataset.konv; nachrichtenZeigen(); return; }
   if (d.dataset.ford){ forderungAntworten(d.dataset.id, d.dataset.ford); return; }
   if (d.dataset.fordWeg){
