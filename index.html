@@ -64,6 +64,36 @@ h1{font-family:'Fraunces',Georgia,serif;font-weight:800;font-size:clamp(30px,7vw
 #board{display:block;width:100%;height:auto;margin:4px 0 10px;touch-action:manipulation}
 .brettbox{position:relative}
 .zugleiste .btn{flex:1}
+.turnierphase{font-family:'Fraunces',Georgia,serif;font-size:21px;margin:0}
+.tmatch{border-top:1px solid var(--line);padding:10px 0;display:grid;grid-template-columns:1fr auto;gap:6px 10px;align-items:center}
+.tmatch:first-child{border-top:none}
+.tmatch .wer{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-family:'Fraunces',Georgia,serif;font-size:17px}
+.tmatch .wer .sieger{font-weight:700}
+.tmatch .wer .gegen{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--ink-soft)}
+.tmatch .erg{font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:600;text-align:right}
+.tmatch .info{grid-column:1 / -1;font-size:12px;color:var(--ink-soft);margin-top:-2px}
+.tmatch .knoepfe{grid-column:1 / -1;display:flex;gap:8px;flex-wrap:wrap}
+.tmatch .knoepfe button{flex:1;min-width:120px}
+.ttab{width:100%;border-collapse:collapse;font-size:14px}
+.ttab th{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-soft);font-weight:500;text-align:right;padding:4px 4px 6px}
+.ttab th:nth-child(2){text-align:left}
+.ttab td{padding:7px 4px;border-top:1px solid var(--line);text-align:right;font-family:'IBM Plex Mono',monospace}
+.ttab td:nth-child(2){text-align:left;font-family:'Fraunces',Georgia,serif;font-size:16px}
+.ttab td:nth-child(2) .namezeile{gap:6px}
+.ttab tr.schnitt td{border-bottom:2px solid #8C3226}
+.ttab tr.raus td{opacity:.5;text-decoration:line-through}
+.ttab tr.ich td:nth-child(2){font-weight:700}
+.tplan{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:14px}
+.tplan .jetzt{font-weight:700;color:#8C3226}
+.regeln h4{font-family:'Fraunces',Georgia,serif;font-size:17px;margin:18px 0 6px}
+.regeln h4:first-child{margin-top:4px}
+.regeln p,.regeln li{font-size:14px;line-height:1.55;margin:0 0 8px}
+.regeln ol,.regeln ul{padding-left:20px;margin:0 0 8px}
+.turnieruhr{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:10px 0 0;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--field)}
+.turnieruhr .uhrzeit{font-family:'IBM Plex Mono',monospace;font-size:22px;font-weight:700;min-width:58px}
+.turnieruhr .uhrzeit.knapp{color:#C7332A}
+.turnieruhr .uhrtext{flex:1;font-size:13px;color:var(--ink-soft);min-width:120px}
+.turnieruhr button{width:auto;padding:7px 12px}
 .avatar{display:inline-flex;align-items:center;justify-content:center;flex:none;border-radius:50%;object-fit:cover;
   border:1px solid #7A5231;background:var(--field);vertical-align:middle}
 .avatar.leer{background:#8A6039;color:var(--pearl);font-family:'Fraunces',Georgia,serif;font-weight:700;border-color:#5E4128}
@@ -311,6 +341,7 @@ ul.log li.edit .btn{width:auto;padding:9px 16px}
   <div id="app" class="hidden">
     <nav class="tabs" id="tabs">
       <button class="tab aktiv" data-view="mainView">Liga<span class="zaehler hidden" id="ligaZaehler">0</span></button>
+      <button class="tab" data-view="turnierView">Turnier<span class="zaehler hidden" id="turnierZaehler">0</span></button>
       <button class="tab" data-view="gamesView">Spielen<span class="zaehler hidden" id="dranZaehler">0</span></button>
       <button class="tab" data-view="chatView">Chat<span class="zaehler hidden" id="chatZaehler">0</span></button>
       <button class="tab" data-view="extras">Extras</button>
@@ -417,6 +448,7 @@ ul.log li.edit .btn{width:auto;padding:9px 16px}
         <p class="eyebrow">Ergebnis</p>
         <p class="endtitel" id="endTitel"></p>
         <p class="note" id="endSub" style="margin:4px 0 14px"></p>
+        <button class="btn hidden" id="turnierWeiter" style="margin:0 0 14px">Nächstes Spiel im Match</button>
         <div id="endStats"></div>
       </div>
       <div class="panel">
@@ -431,6 +463,12 @@ ul.log li.edit .btn{width:auto;padding:9px 16px}
           <button class="btn" id="rollBtn">Würfeln</button>
           <button class="btn" id="endBtn">Zug beenden</button>
           <button class="ghost" id="undoBtn">zurück</button>
+        </div>
+        <div class="turnieruhr hidden" id="turnierUhr">
+          <span class="uhrzeit" id="uhrZeit">1:00</span>
+          <span class="uhrtext" id="uhrText"></span>
+          <button class="ghost" id="uhrKnopf1"></button>
+          <button class="ghost hidden" id="uhrKnopf2"></button>
         </div>
         <button class="ghost hidden" id="letzterBtn" style="width:100%;margin-top:10px;padding:10px">Letzten Zug anzeigen</button>
         <p class="note" id="boardHinweis">Tipp auf einen eigenen Stein, dann auf das Ziel.</p>
@@ -455,6 +493,23 @@ ul.log li.edit .btn{width:auto;padding:9px 16px}
         <span class="tag" id="boardStand">—</span>
         <button class="ghost" id="backFromBoard">Zurück zur Übersicht</button>
       </div>
+    </div>
+
+    <div class="stack hidden" id="turnierView">
+      <div class="panel turnierkopf">
+        <p class="eyebrow">Herbstturnier 2026</p>
+        <p class="turnierphase" id="tPhase">Wird geladen …</p>
+        <p class="note" id="tPhaseText" style="margin:6px 0 0"></p>
+      </div>
+      <div class="panel hidden herausforderung" id="tMeinPanel"><p class="eyebrow">Dein Match</p><div id="tMein"></div></div>
+      <div class="panel hidden" id="tAnmeldePanel"><p class="eyebrow">Anmeldung</p><div id="tAnmeldung"></div></div>
+      <div class="panel hidden" id="tKoPanel"><p class="eyebrow">Halbfinale und Finale</p><div id="tKo"></div></div>
+      <div class="panel hidden" id="tRundePanel"><p class="eyebrow" id="tRundeTitel">Paarungen</p><div id="tRunde"></div></div>
+      <div class="panel hidden" id="tTabellePanel"><p class="eyebrow">Tabelle der Gruppenphase</p><div id="tTabelle"></div>
+        <p class="note">Reihenfolge: Siege · Buchholz · Punktedifferenz. Die Linie trennt die Plätze fürs Halbfinale.</p></div>
+      <details class="panel alt hidden" id="tFruehPanel"><summary>Frühere Runden</summary><div id="tFrueh"></div></details>
+      <details class="panel alt" id="tPlanPanel"><summary>Zeitplan</summary><div id="tPlan"></div></details>
+      <details class="panel alt" id="tRegelPanel"><summary>Regeln</summary><div id="tRegeln" class="regeln"></div></details>
     </div>
 
     <div class="stack hidden" id="chatView">
@@ -502,6 +557,7 @@ ul.log li.edit .btn{width:auto;padding:9px 16px}
         <button class="ghost hidden" id="pushAus" style="width:100%;margin-top:8px;padding:10px">ausschalten</button>
         <div id="pushArten" class="pusharten">
           <p class="note" style="margin:14px 0 6px">Benachrichtigen bei …</p>
+          <label><input type="checkbox" data-art="turnier" /> Turnier: Auslosung, Fristen, Ergebnisse</label>
           <label><input type="checkbox" data-art="herausforderung" /> Herausforderungen</label>
           <label><input type="checkbox" data-art="dran" /> wenn ich in einer Partie dran bin</label>
           <label><input type="checkbox" data-art="gruppe" /> Gruppennachrichten</label>
@@ -704,12 +760,13 @@ function unlock(){
       if (e.data && e.data.typ === "welchePartie" && e.ports && e.ports[0]){
         const brettOffen = !$("boardView").classList.contains("hidden") && !document.hidden;
         const id = brettOffen && aktuellesSpiel && !aktuellesSpiel.training ? aktuellesSpiel.id : null;
-        const ansicht = ["mainView","gamesView","boardView","chatView","statsView","diceView","settingsView"].find(v => !$(v).classList.contains("hidden"));
+        const ansicht = ["mainView","turnierView","gamesView","boardView","chatView","statsView","diceView","settingsView"].find(v => !$(v).classList.contains("hidden"));
         e.ports[0].postMessage({ spiel: id, chat: chatOffen() ? chatKonv : null, ansicht: document.hidden ? null : ansicht });
         return;
       }
       if (e.data && e.data.typ === "chat"){ chatKonv = e.data.konv || "gruppe"; zeigeAnsicht("chatView"); return; }
       if (e.data && e.data.typ === "liga"){ zeigeAnsicht("mainView"); return; }
+      if (e.data && e.data.typ === "turnier"){ zeigeAnsicht("turnierView"); return; }
       if (e.data && e.data.typ === "spiel") spielAusNachricht(e.data.id);
       if (e.data && e.data.typ === "spielen"){ await spieleLaden(); zeigeAnsicht("gamesView"); }
     });
@@ -717,7 +774,9 @@ function unlock(){
   const sprung = (location.hash.match(/spiel=([^&]+)/) || [])[1];
   const zumSpielen = /^#spielen\b/.test(location.hash);
   const zumChat = (location.hash.match(/chat=([^&]+)/) || [])[1];
-  if (sprung || zumSpielen || zumChat || /^#liga\b/.test(location.hash)) history.replaceState({ ansicht: "mainView" }, "", location.pathname);
+  const zumTurnier = /^#turnier\b/.test(location.hash);
+  if (sprung || zumSpielen || zumChat || zumTurnier || /^#liga\b/.test(location.hash)) history.replaceState({ ansicht: "mainView" }, "", location.pathname);
+  if (zumTurnier) setTimeout(() => zeigeAnsicht("turnierView"), 700);
   if (zumChat) setTimeout(() => { chatKonv = decodeURIComponent(zumChat); zeigeAnsicht("chatView"); }, 700);
   if (sprung) setTimeout(() => spielAusNachricht(decodeURIComponent(sprung)), 700);
   else if (zumSpielen) setTimeout(async () => { await spieleLaden(); zeigeAnsicht("gamesView"); }, 300);
@@ -1443,7 +1502,7 @@ function refresh(){
     dranZaehlen();
     if (!$("gamesView").classList.contains("hidden")){ renderGames(); trainingSuchen(); }
     if (!$("boardView").classList.contains("hidden") && stand) brettZeichnen();
-    forderungenZeigen(); fordernFormular(); nachrichtenZeigen();
+    forderungenZeigen(); fordernFormular(); nachrichtenZeigen(); turnierZeigen();
     if (!$("settingsView").classList.contains("hidden")) einstellungenZeigen();
   } catch (e) { console.error(e); }
 }
@@ -2149,6 +2208,293 @@ function zugText(st, zuege){
 }
 // === Training Ende ===
 
+// ===== Turnier-Kern (gemeinsam für App und Server) =====
+const TURNIER = {
+  id: "herbst2026",
+  name: "Herbstturnier 2026",
+  zeitzone: "Europe/Berlin",
+  anmeldungBis: "2026-10-07",      // letzter Anmeldetag, bis 23:59
+  swissStart: "2026-10-08",        // erster Spieltag von Runde 1
+  swissRunden: 3,
+  spieltage: 6,                    // Spieltage je Runde; am 7. Tag wird ausgelost
+  koTage: 3,                       // Spieltage für Halbfinale und Finale
+  pauseTage: 1,                    // Pause zwischen Halbfinale und Finale
+  swissSpiele: 2,                  // Gruppenphase: genau zwei Spiele, Unentschieden möglich
+  ziele: { swiss: 2, stechen: 1, halbfinale: 3, finale: 4 },   // K.-o.: bis zu dieser Punktzahl
+  stichzeit: "20:00",              // am letzten Spieltag: danach Pflichtspiel online
+  beitrittMinuten: 15,
+  zugSekunden: 60,
+  koPlaetze: 4,
+  mindestens: 4,
+};
+
+// ---------- Datum und Zeitzone ----------
+function turnierPlusTage(datum, n){
+  const [y, m, d] = datum.split("-").map(Number);
+  const t = new Date(Date.UTC(y, m - 1, d + n));
+  return t.toISOString().slice(0, 10);
+}
+function turnierZonenVersatz(ms, zone){
+  const f = new Intl.DateTimeFormat("en-US", { timeZone: zone, hourCycle: "h23", year: "numeric", month: "2-digit",
+    day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  const t = {}; f.formatToParts(new Date(ms)).forEach(p => { t[p.type] = p.value; });
+  return (Date.UTC(+t.year, +t.month - 1, +t.day, +t.hour, +t.minute, +t.second) - ms) / 60000;
+}
+// Ortszeit (z. B. "2026-10-13", "20:00" in Berlin) → Millisekunden seit 1970
+function turnierOrtszeit(datum, uhr, zone){
+  const [y, m, d] = datum.split("-").map(Number);
+  const [h, mi] = (uhr || "00:00").split(":").map(Number);
+  const roh = Date.UTC(y, m - 1, d, h, mi);
+  let ms = roh;
+  for (let i = 0; i < 3; i++) ms = roh - turnierZonenVersatz(ms, zone) * 60000;
+  return ms;
+}
+
+// ---------- Zeitplan ----------
+// Jede Phase: ab (Auslosung, ab dann spielbar), letzter Spieltag, frist (letzter Tag 20:00), ziel
+function turnierZeitplan(T = TURNIER){
+  const z = (datum, uhr = "00:00") => turnierOrtszeit(datum, uhr, T.zeitzone);
+  const phasen = [];
+  let ab = turnierPlusTage(T.anmeldungBis, 1);
+  for (let r = 1; r <= T.swissRunden; r++){
+    const start = turnierPlusTage(T.swissStart, (r - 1) * (T.spieltage + 1));
+    const letzter = turnierPlusTage(start, T.spieltage - 1);
+    phasen.push({ phase: "swiss", runde: r, ziel: T.ziele.swiss, abDatum: ab, start, letzter,
+                  ab: z(ab), frist: z(letzter, T.stichzeit) });
+    ab = turnierPlusTage(letzter, 1);                  // 7. Tag: Auslosung der nächsten Runde
+  }
+  const stechTag = ab;
+  phasen.push({ phase: "stechen", runde: T.swissRunden + 1, ziel: T.ziele.stechen, abDatum: stechTag, start: stechTag, letzter: stechTag,
+                ab: z(stechTag), frist: z(stechTag, T.stichzeit) });
+  const hfStart = turnierPlusTage(stechTag, 1), hfLetzter = turnierPlusTage(hfStart, T.koTage - 1);
+  phasen.push({ phase: "halbfinale", runde: T.swissRunden + 2, ziel: T.ziele.halbfinale, abDatum: stechTag, start: hfStart, letzter: hfLetzter,
+                ab: z(stechTag), frist: z(hfLetzter, T.stichzeit) });
+  const fStart = turnierPlusTage(hfLetzter, T.pauseTage + 1), fLetzter = turnierPlusTage(fStart, T.koTage - 1);
+  phasen.push({ phase: "finale", runde: T.swissRunden + 3, ziel: T.ziele.finale, abDatum: hfLetzter, start: fStart, letzter: fLetzter,
+                ab: z(hfLetzter), frist: z(fLetzter, T.stichzeit) });
+  return { anmeldungEnde: z(turnierPlusTage(T.anmeldungBis, 1)), phasen };
+}
+
+// ---------- Modus eines Matches ----------
+// Gruppenphase: feste Anzahl Spiele (Sieger*in nach gewonnenen Spielen, sonst unentschieden).
+// Stechen, Halbfinale, Finale: bis zur Zielpunktzahl.
+function turnierIstAnzahl(m){ return m.phase === "swiss"; }
+function turnierIstRemis(m){ return m.status === "fertig" && !!m.p2 && !m.sieger && m.art !== "beide_raus"; }
+
+// Stand aus den gewerteten Spielen: Punkte, gewonnene Spiele, ob entschieden und wer gewinnt
+function turnierMatchErgebnis(m, spiele, T = TURNIER){
+  let p1 = 0, p2 = 0, s1 = 0, s2 = 0;
+  (spiele || m.spiele || []).forEach(x => {
+    if (x.sieger === m.p1){ p1 += x.punkte; s1++; } else if (x.sieger === m.p2){ p2 += x.punkte; s2++; }
+  });
+  if (turnierIstAnzahl(m)){
+    const fertig = s1 + s2 >= T.swissSpiele;
+    return { p1, p2, s1, s2, fertig, sieger: !fertig ? null : s1 > s2 ? m.p1 : s2 > s1 ? m.p2 : null };
+  }
+  const fertig = p1 >= m.ziel || p2 >= m.ziel;
+  return { p1, p2, s1, s2, fertig, sieger: !fertig ? null : p1 >= m.ziel ? m.p1 : m.p2 };
+}
+
+// Gemeldetes Offline-Ergebnis prüfen (Punkte beider Seiten) und auswerten
+function turnierOfflinePruefen(m, a, b, T = TURNIER){
+  if (turnierIstAnzahl(m)){
+    // Zwei Spiele à 1–3 Punkte: 0 Punkte heißt beide verloren, sonst hat jede*r eins gewonnen
+    const n = T.swissSpiele, max = 3 * n;
+    if (a === 0 && b >= n && b <= max) return { ok: true, sieger: m.p2 };
+    if (b === 0 && a >= n && a <= max) return { ok: true, sieger: m.p1 };
+    if (a >= 1 && a <= 3 && b >= 1 && b <= 3) return { ok: true, sieger: null };
+    return { ok: false, grund: "Bei zwei Spielen geht das nicht: Wer beide gewinnt, hat 2 bis 6 Punkte und die Gegenseite 0. Hat jede*r ein Spiel gewonnen, hat jede*r 1 bis 3 Punkte." };
+  }
+  if ((a >= m.ziel) === (b >= m.ziel) || a === b) return { ok: false, grund: `Genau eine Seite muss mindestens ${m.ziel} Punkte haben.` };
+  return { ok: true, sieger: a > b ? m.p1 : m.p2 };
+}
+
+// ---------- Tabelle der Gruppenphase ----------
+// Reihenfolge: Rundensiege, Buchholz, Punktedifferenz, direkter Vergleich, Bo1-Stechen, Setzliste
+function turnierTabelle(teilnahmen, matches){
+  const s = {};
+  teilnahmen.forEach(t => {
+    s[t.spieler] = { spieler: t.spieler, seed: t.seed || 999, status: t.status || "dabei",
+                     siege: 0, niederlagen: 0, gegner: [], plus: 0, minus: 0, freilos: 0, gespielt: 0 };
+  });
+  const swiss = matches.filter(m => m.phase === "swiss" && m.status === "fertig");
+  swiss.forEach(m => {
+    const a = s[m.p1], b = m.p2 ? s[m.p2] : null;
+    if (!a) return;
+    if (!m.p2){ a.siege++; a.freilos++; return; }                        // Freilos
+    if (!b) return;
+    a.gegner.push(m.p2); b.gegner.push(m.p1);
+    a.gespielt++; b.gespielt++;
+    a.plus += m.punkte1 || 0; a.minus += m.punkte2 || 0;
+    b.plus += m.punkte2 || 0; b.minus += m.punkte1 || 0;
+    if (m.sieger === m.p1){ a.siege++; b.niederlagen++; }
+    else if (m.sieger === m.p2){ b.siege++; a.niederlagen++; }
+    else if (turnierIstRemis(m)){ a.siege += 0.5; b.siege += 0.5; a.remis = (a.remis || 0) + 1; b.remis = (b.remis || 0) + 1; }
+    else { a.niederlagen++; b.niederlagen++; }                           // beide ausgeschieden
+  });
+  const liste = Object.values(s);
+  liste.forEach(x => {
+    x.buchholz = x.gegner.reduce((summe, g) => summe + (s[g] ? s[g].siege : 0), 0);
+    x.diff = x.plus - x.minus;
+  });
+  const direkt = (a, b) => swiss.filter(m => m.p2 && ((m.p1 === a && m.p2 === b) || (m.p1 === b && m.p2 === a)));
+  const stechen = matches.filter(m => m.phase === "stechen" && m.status === "fertig" && m.sieger);
+
+  // Grobsortierung nach den ersten drei Kriterien
+  const schluessel = (x) => [x.siege, x.buchholz, x.diff];
+  liste.sort((a, b) => b.siege - a.siege || b.buchholz - a.buchholz || b.diff - a.diff || a.seed - b.seed);
+  // Gleichstände über direkten Vergleich, Stechen, Setzliste auflösen
+  const ergebnis = [];
+  for (let i = 0; i < liste.length;){
+    let j = i + 1;
+    while (j < liste.length && schluessel(liste[j]).join() === schluessel(liste[i]).join()) j++;
+    const block = liste.slice(i, j);
+    if (block.length > 1){
+      const ids = new Set(block.map(x => x.spieler));
+      block.forEach(x => {
+        x.direkt = swiss.filter(m => m.p2 && ids.has(m.p1) && ids.has(m.p2) && m.sieger === x.spieler).length
+                 + 0.5 * swiss.filter(m => m.p2 && ids.has(m.p1) && ids.has(m.p2) && (m.p1 === x.spieler || m.p2 === x.spieler) && turnierIstRemis(m)).length;
+        x.stechen = stechen.filter(m => ids.has(m.p1) && ids.has(m.p2) && m.sieger === x.spieler).length;
+      });
+      block.sort((a, b) => b.direkt - a.direkt || b.stechen - a.stechen || a.seed - b.seed);
+      // Merken, wo nur noch die Setzliste entschieden hat (dann wäre ein Stechen fällig)
+      for (let k = 0; k < block.length - 1; k++){
+        const a = block[k], b = block[k + 1];
+        a.gleichMitNaechstem = a.direkt === b.direkt && a.stechen === b.stechen;
+      }
+    }
+    block.forEach(x => ergebnis.push(x));
+    i = j;
+  }
+  ergebnis.forEach((x, i) => { x.platz = i + 1; });
+  void direkt;
+  return ergebnis;
+}
+
+// Wer kommt ins Halbfinale? Aktive Spieler*innen nach Tabelle. Liefert ggf. das nötige Stechen.
+function turnierKoAuswahl(tabelle, plaetze){
+  const aktiv = tabelle.filter(x => x.status !== "ausgeschieden");
+  if (aktiv.length <= plaetze) return { weiter: aktiv, stechen: null };
+  const letzter = aktiv[plaetze - 1], erster = aktiv[plaetze];
+  const gleich = (a, b) => a.siege === b.siege && a.buchholz === b.buchholz && a.diff === b.diff && a.gleichMitNaechstem;
+  if (gleich(letzter, erster)){
+    // Gleichstand genau an der Grenze: Wie groß ist der Block?
+    let von = plaetze - 1, bis = plaetze;
+    while (von > 0 && gleich(aktiv[von - 1], aktiv[von])) von--;
+    while (bis < aktiv.length - 1 && gleich(aktiv[bis], aktiv[bis + 1])) bis++;
+    if (bis - von + 1 === 2) return { weiter: aktiv.slice(0, plaetze), stechen: [letzter.spieler, erster.spieler] };
+    // mehr als zwei gleichauf: Setzliste entscheidet (in den Regeln erklärt)
+  }
+  return { weiter: aktiv.slice(0, plaetze), stechen: null };
+}
+
+// ---------- Swiss-Auslosung ----------
+// runde 1: nach Setzliste, obere Hälfte gegen untere Hälfte. Danach: Gleichstarke gegeneinander, keine Wiederholungen.
+function turnierAuslosen(runde, tabelle, bisherige, freilosGehabt){
+  const aktiv = tabelle.filter(x => x.status !== "ausgeschieden");
+  let reihe = runde === 1 ? aktiv.slice().sort((a, b) => a.seed - b.seed) : aktiv.slice();
+  let freilos = null;
+  if (reihe.length % 2 === 1){
+    for (let i = reihe.length - 1; i >= 0; i--){
+      if (!freilosGehabt.has(reihe[i].spieler)){ freilos = reihe[i].spieler; break; }
+    }
+    if (!freilos) freilos = reihe[reihe.length - 1].spieler;
+    reihe = reihe.filter(x => x.spieler !== freilos);
+  }
+  const gespielt = (a, b) => bisherige.has(a + "|" + b) || bisherige.has(b + "|" + a);
+  if (runde === 1){
+    const h = reihe.length / 2;
+    const paare = [];
+    for (let i = 0; i < h; i++) paare.push([reihe[i].spieler, reihe[i + h].spieler]);
+    return { paare, freilos };
+  }
+  const pos = new Map(reihe.map((x, i) => [x.spieler, i]));
+  const gruppe = (x) => reihe.filter(y => y.siege === x.siege);
+  function paaren(rest, wiederholungErlaubt){
+    if (!rest.length) return [];
+    const [a, ...andere] = rest;
+    const g = gruppe(a), gi = g.indexOf(a), halb = Math.floor(g.length / 2);
+    const wunsch = pos.get(a.spieler) - gi + ((gi + halb) % Math.max(g.length, 1));
+    const kandidaten = andere.slice().sort((x, y) =>
+      Math.abs(x.siege - a.siege) - Math.abs(y.siege - a.siege) ||
+      Math.abs(pos.get(x.spieler) - wunsch) - Math.abs(pos.get(y.spieler) - wunsch) ||
+      pos.get(x.spieler) - pos.get(y.spieler));
+    for (const b of kandidaten){
+      if (!wiederholungErlaubt && gespielt(a.spieler, b.spieler)) continue;
+      const weiter = paaren(andere.filter(x => x !== b), wiederholungErlaubt);
+      if (weiter) return [[a.spieler, b.spieler], ...weiter];
+    }
+    return null;
+  }
+  const paare = paaren(reihe, false) || paaren(reihe, true) || [];
+  return { paare, freilos };
+}
+
+// ---------- Zeit ----------
+// Punkte bei Zeitablauf: gewertet, als hätte die andere Seite alle Steine draußen
+function turnierZeitWertung(st, sieger){
+  const verl = sieger === 1 ? 2 : 1;
+  if (st.off[verl] > 0) return 1;
+  const aufGegnerHaelfte = sieger === 1 ? st.pts.slice(0, 12).some(v => v < 0) : st.pts.slice(12, 24).some(v => v > 0);
+  return (st.bar[verl] > 0 || aufGegnerHaelfte) ? 3 : 2;
+}
+
+// Restzeit des laufenden Zugs in ms (Pausen des Matches abgezogen)
+function turnierRestzeit(st, pause, jetzt, T = TURNIER){
+  if (!st || !st.zugBeginn || st.phase !== "spiel" || st.gewinner) return null;
+  const beginn = st.zugBeginn;
+  let pausiert = 0;
+  ((pause && pause.intervalle) || []).forEach(iv => {
+    const von = Math.max(iv.von, beginn), bis = Math.min(iv.bis || jetzt, jetzt);
+    if (bis > von) pausiert += bis - von;
+  });
+  return T.zugSekunden * 1000 - (jetzt - beginn - pausiert);
+}
+function turnierPausiert(pause){ return !!(pause && pause.intervalle && pause.intervalle.some(iv => !iv.bis)); }
+
+// Punkte eines Matches aus den gewerteten Spielen
+function turnierMatchStand(m){ const e = turnierMatchErgebnis(m); return { p1: e.p1, p2: e.p2 }; }
+// ===== Turnier-Kern Ende =====
+
+// ---------- Gemeinsame Helfer für Matches und Spiele ----------
+function turnierAnfangsstand(){
+  return { pts: [-2,0,0,0,0,5, 0,3,0,0,0,-5, 5,0,0,0,-3,0, -5,0,0,0,0,2], bar: {1:0, 2:0}, off: {1:0, 2:0},
+           turn: 0, wurf: [], rest: [], gewinner: null, art: 1, phase: "eroeffnung", erst: {1: null, 2: null} };
+}
+
+// Ein beendetes Spiel ins Match übernehmen (doppelt wird nichts gezählt)
+function turnierSpielWerten(m, g){
+  if (!g || !g.state || !g.state.gewinner) return null;
+  if ((m.spiele || []).some(s => s.game === g.id)) return null;
+  const sieger = g.state.gewinner === 1 ? g.p1 : g.p2;
+  const spiele = (m.spiele || []).concat([{ game: g.id, sieger, punkte: g.state.art || 1, zeit: !!g.state.zeitAblauf }]);
+  const e = turnierMatchErgebnis(m, spiele);
+  const neu = { spiele, punkte1: e.p1, punkte2: e.p2 };
+  if (e.fertig){ neu.status = "fertig"; neu.sieger = e.sieger; neu.art = "online"; }
+  return neu;
+}
+
+// Nächstes Spiel eines Matches: Farben werden jedes Mal neu verlost
+function turnierNeuesSpiel(m, nr){
+  const tausch = Math.random() < 0.5;
+  return { p1: tausch ? m.p2 : m.p1, p2: tausch ? m.p1 : m.p2, state: turnierAnfangsstand(), status: "laufend",
+           turnier: m.turnier, turnier_match: m.id, turnier_spiel: nr };
+}
+
+// Elo wie in der Liga (Start 1000, K 24, Gammon/Backgammon zählen mehrfach)
+function turnierElo(spieler, ligaPartien){
+  const r = {};
+  spieler.forEach(p => { r[p.id] = 1000; });
+  ligaPartien.slice().sort((a, b) => new Date(a.created_at) - new Date(b.created_at)).forEach(m => {
+    if (r[m.winner] === undefined || r[m.loser] === undefined) return;
+    const e = 1 / (1 + Math.pow(10, (r[m.loser] - r[m.winner]) / 400));
+    const d = Math.round(24 * (m.mult || 1) * (1 - e));
+    r[m.winner] += d; r[m.loser] -= d;
+  });
+  return r;
+}
+
+
 // --- Spielbetrieb ---
 let games = [], aktuellesSpiel = null, stand = null, gewaehlt = null, verlauf = [], zugListe = [], kanal = null;
 // Jeder gespeicherte Spielstand trägt eine fortlaufende Nummer (v). Übernommen wird nur, was neuer ist —
@@ -2266,6 +2612,11 @@ function renderArchiv(){
   }).join("");
   box.querySelectorAll("[data-g1]").forEach(el => el.textContent = nameOf(el.dataset.g1));
   box.querySelectorAll("[data-g2]").forEach(el => el.textContent = nameOf(el.dataset.g2));
+  box.querySelectorAll("[data-g1]").forEach(el => {
+    const zeile = el.closest(".gzeile"), knopf = zeile && zeile.querySelector("[data-open],[data-ansehen]");
+    const g = knopf && games.find(x => x.id === (knopf.dataset.open || knopf.dataset.ansehen));
+    if (g && g.turnier_match && !zeile.querySelector(".tmarke")) el.insertAdjacentHTML("beforebegin", '<span class="kandidat"><span class="etikett tmarke" style="margin:0 6px 0 0">Turnier</span></span>');
+  });
   box.querySelectorAll("[data-sieg]").forEach(el => el.textContent = nameOf(el.dataset.sieg));
 }
 
@@ -2307,6 +2658,11 @@ function renderGames(){
   }).join("");
   box.querySelectorAll("[data-g1]").forEach(el => el.textContent = nameOf(el.dataset.g1));
   box.querySelectorAll("[data-g2]").forEach(el => el.textContent = nameOf(el.dataset.g2));
+  box.querySelectorAll("[data-g1]").forEach(el => {
+    const zeile = el.closest(".gzeile"), knopf = zeile && zeile.querySelector("[data-open],[data-ansehen]");
+    const g = knopf && games.find(x => x.id === (knopf.dataset.open || knopf.dataset.ansehen));
+    if (g && g.turnier_match && !zeile.querySelector(".tmarke")) el.insertAdjacentHTML("beforebegin", '<span class="kandidat"><span class="etikett tmarke" style="margin:0 6px 0 0">Turnier</span></span>');
+  });
 }
 
 // --- Brett zeichnen ---
@@ -2586,6 +2942,7 @@ async function spielSpeichern(fertig){
 
 async function ergebnisEintragen(){
   if (aktuellesSpiel && aktuellesSpiel.training) return;     // Training zählt nicht
+  if (aktuellesSpiel && aktuellesSpiel.turnier_match) return; // Turnier zählt nicht für die Liga
   const sieger = stand.gewinner === 1 ? aktuellesSpiel.p1 : aktuellesSpiel.p2;
   const verlierer = stand.gewinner === 1 ? aktuellesSpiel.p2 : aktuellesSpiel.p1;
   try {
@@ -2643,15 +3000,33 @@ function ergebnisZeigen(){
   const punkte = stand.art;
   if (meinSitz === stand.gewinner){
     $("endTitel").textContent = "Glückwunsch!";
-    $("endSub").textContent = `Du hast gewonnen — ${art}, ${punkte} ${punkte === 1 ? "Punkt" : "Punkte"} für die Liga.`;
+    $("endSub").textContent = aktuellesSpiel.turnier_match
+      ? `Du hast gewonnen — ${stand.zeitAblauf ? "Zeitablauf der Gegenseite, " : ""}${art}, ${punkte} ${punkte === 1 ? "Punkt" : "Punkte"} fürs Turnier-Match.`
+      : `Du hast gewonnen — ${art}, ${punkte} ${punkte === 1 ? "Punkt" : "Punkte"} für die Liga.`;
   } else if (meinSitz){
     $("endTitel").textContent = "Leider verloren.";
-    $("endSub").textContent = `${namen[stand.gewinner]} gewinnt — ${art}. Revanche?`;
+    $("endSub").textContent = aktuellesSpiel.turnier_match
+      ? `${namen[stand.gewinner]} gewinnt — ${stand.zeitAblauf ? "deine Zugzeit ist abgelaufen, " : ""}${art}.`
+      : `${namen[stand.gewinner]} gewinnt — ${art}. Revanche?`;
   } else {
     $("endTitel").textContent = `${namen[stand.gewinner]} gewinnt`;
     $("endSub").textContent = art;
   }
 
+  {
+    const tm = aktuellesSpiel && aktuellesSpiel.turnier_match ? turnierMatch(aktuellesSpiel.turnier_match) : null;
+    const knopf = $("turnierWeiter");
+    if (knopf){
+      const weiter = tm && tm.status !== "fertig" && turnierNaechstes && turnierNaechstes.turnier_match === tm.id;
+      knopf.classList.toggle("hidden", !weiter);
+      if (tm){
+        const n = (tm.spiele || []).length;
+        const wie = tm.status !== "fertig" ? (turnierIstAnzahl(tm) ? `Spiel ${n} von ${TURNIER.swissSpiele}` : tFormat(tm))
+                  : tm.sieger ? `${nameOf(tm.sieger)} gewinnt das Match` : "unentschieden";
+        $("endSub").textContent += ` Match: Punkte ${tm.punkte1 || 0}:${tm.punkte2 || 0} — ${wie}.`;
+      }
+    }
+  }
   const st = stand.stats || {};
   const a = { ...leereStats(), ...(st[1] || {}) }, b = { ...leereStats(), ...(st[2] || {}) };
   if (!a.wuerfe && !b.wuerfe){
@@ -2832,8 +3207,9 @@ async function chatSenden(text, schnell){
 }
 
 // Der eigene angefangene Zug wird geschützt — aber nur, solange er wirklich läuft.
-function eigenerZugLaeuft(fremderZug){
+function eigenerZugLaeuft(fremderZug, fremderStand){
   if (!stand || !aktuellesSpiel) return false;
+  if (fremderStand && fremderStand.gewinner) return false;       // Spielende (z. B. Zeitablauf) immer übernehmen
   if (stand.turn !== sitz(aktuellesSpiel.id)) return false;
   if (fremderZug !== undefined && fremderZug !== stand.turn) return false;
   return stand.wurf.length > 0 && !stand.gewinner;
@@ -2843,7 +3219,7 @@ function standUebernehmen(frisch){
   if (!frisch || !aktuellesSpiel || frisch.id !== aktuellesSpiel.id) return;
   if (istVeraltet(frisch.state)) return;
   if (JSON.stringify(frisch.state) === JSON.stringify(stand) && frisch.status === aktuellesSpiel.status) return;
-  if (eigenerZugLaeuft(frisch.state && frisch.state.turn)) return;
+  if (eigenerZugLaeuft(frisch.state && frisch.state.turn, frisch.state)) return;
   const geradeBeendet = frisch.status === "fertig" && aktuellesSpiel.status !== "fertig";
   aktuellesSpiel = frisch;
   stand = frisch.state;
@@ -2923,7 +3299,7 @@ async function zugMachen(zug){
 
 async function partieAbschliessen(){
   const training = aktuellesSpiel && aktuellesSpiel.training;
-  if (!training && stand.gewinner === sitz(aktuellesSpiel.id)){
+  if (!training && stand.gewinner === sitz(aktuellesSpiel.id) && !stand.zeitAblauf){
     letztenZugMerken();
     zugArchivieren(stand.letzterZug, stand);
   }
@@ -2939,6 +3315,7 @@ async function partieAbschliessen(){
   brettZeichnen();
   if (training){ await trainingSichern(true); return; }
   await ergebnisEintragen();
+  if (aktuellesSpiel.turnier_match) await turnierNachSpiel(aktuellesSpiel);
   nachOnlinePartie(aktuellesSpiel);
   {
     const g = aktuellesSpiel, art = stand.art === 3 ? "Backgammon" : stand.art === 2 ? "Gammon" : "einfacher Sieg";
@@ -3082,6 +3459,7 @@ async function zugAbschliessen(){
   const ichSitz = stand.turn;
   stand = zugBeenden(stand);
   stand.zug = null;
+  stand.zugBeginn = Date.now();
   if (!aktuellesSpiel.training){
     const g = aktuellesSpiel;
     benachrichtigen(gegnerVon(g, ichSitz), "Du bist dran", `${nameOf(spielerVon(g, ichSitz))} hat gezogen.`, g.id);
@@ -3247,6 +3625,7 @@ async function nebendatenLaden(){
   if (n) nachrichten = n;
   const c = await holen("chat", t => t.select("*").order("created_at", { ascending: true }).limit(3000));
   if (c) spielChats = c;
+  await turnierLaden();
   const e = await holen("einstellungen", t => t.select("*"));
   if (e){ praefs = {}; e.forEach(x => { praefs[x.spieler] = x.benachrichtigungen || {}; }); }
   try { if (!localStorage.getItem("bgl-gelesen-start")) localStorage.setItem("bgl-gelesen-start", String(Date.now())); } catch (err) {}
@@ -3259,6 +3638,8 @@ function echtzeitGlobalStarten(){
     echtzeitGlobal = db.channel("bx-global")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "nachrichten" }, (p) => nachrichtEingang(p.new))
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "chat" }, (p) => spielChatEingang(p.new))
+      .on("postgres_changes", { event: "*", schema: "public", table: "turnier_matches" }, (p) => turnierEingang("turnier_matches", p.new))
+      .on("postgres_changes", { event: "*", schema: "public", table: "turnier_teilnahmen" }, (p) => turnierEingang("turnier_teilnahmen", p.new))
       .on("postgres_changes", { event: "*", schema: "public", table: "herausforderungen" }, (p) => forderungEingang(p.new))
       .subscribe();
   } catch (e) {}
@@ -3588,6 +3969,455 @@ async function ortLoeschen(id){
   try { await withTimeout(db.from("orte").delete().eq("id", id)); } catch (e) { return; }
   orte = orte.filter(x => x.id !== id);
   orteZeigen(); fordernFormular();
+}
+
+const TURNIER_REGELN = `
+<h4>Worum es geht</h4>
+<p>Das Herbstturnier 2026 läuft in zwei Teilen: drei Wochen <strong>Gruppenphase im Swiss-System</strong>, danach <strong>Halbfinale und Finale</strong> der besten vier. Das Format lehnt sich an <em>Brazilian Dynasty</em> an, das große Age-of-Empires-Turnier in São Paulo — nur eben mit Backgammon.</p>
+
+<h4>Anmeldung</h4>
+<p>Anmelden kannst du dich hier im Reiter bis <strong>Mittwoch, 7. Oktober, 23:59 Uhr</strong>. Dafür muss dein Gerät dir zugeordnet sein. Bis dahin kannst du dich auch wieder abmelden. Es braucht mindestens vier Leute.</p>
+
+<h4>Matches und Punkte</h4>
+<p>Jedes Spiel bringt Punkte wie in der Liga: <strong>einfacher Sieg 1, Gammon 2, Backgammon 3</strong> — mit unserer Hausregel: Backgammon, solange die Verliererseite noch einen Stein auf der gegnerischen Hälfte oder auf der Bar hat. Es gibt keinen Verdopplungswürfel.</p>
+<ul>
+<li><strong>Gruppenphase: genau zwei Spiele.</strong> Wer beide gewinnt, gewinnt das Match. Gewinnt jede*r eins, ist es <strong>unentschieden</strong> — auch wenn eine*r dabei mit Gammon gewonnen hat. Die Punkte zählen dann für die Punktedifferenz.</li>
+<li><strong>Halbfinale: bis 3 Punkte.</strong> Wer zuerst 3 Punkte hat, ist weiter.</li>
+<li><strong>Finale: bis 4 Punkte.</strong></li>
+</ul>
+<p>Turnierpartien zählen <strong>nicht</strong> für die Liga.</p>
+
+<h4>Die Gruppenphase (Swiss-System)</h4>
+<p>Drei Runden. In jeder Runde spielt jede*r genau ein Match. Du hast <strong>sechs Tage</strong> Zeit dafür, am siebten Tag wird die nächste Runde ausgelost.</p>
+<ul>
+<li><strong>Runde 1</strong> wird nach der Elo-Rangliste der Liga gesetzt: Die obere Hälfte spielt gegen die untere, also Platz 1 gegen den ersten der unteren Hälfte und so weiter.</li>
+<li><strong>Ab Runde 2</strong> spielen Leute mit gleich vielen Siegen gegeneinander, und niemand trifft zweimal auf dieselbe Person.</li>
+<li>Bei ungerader Zahl bekommt jede Runde eine Person ein <strong>Freilos</strong> — die am weitesten hinten Stehende, die noch keins hatte. Ein Freilos zählt als ganzer Sieg, bringt aber keine Punkte für die Differenz.</li>
+</ul>
+
+<h4>Die Tabelle</h4>
+<p>Gewertet wird in dieser Reihenfolge — erst wenn ein Kriterium gleich ist, zählt das nächste:</p>
+<ol>
+<li><strong>Rundensiege</strong> — gewonnene Matches. Ein Unentschieden zählt als halber Sieg.</li>
+<li><strong>Buchholz</strong> — die Summe der Siege all deiner bisherigen Gegner*innen. Wer gegen Starke gespielt hat, steht bei gleicher Bilanz vorn. Beispiel: Deine drei Gegner*innen haben 2, 1,5 und 3 Siege, dann hast du Buchholz 6,5. So rechnet auch Brazilian Dynasty.</li>
+<li><strong>Punktedifferenz</strong> — alle deine Punkte in der Gruppenphase minus die deiner Gegner*innen.</li>
+<li><strong>Direkter Vergleich</strong> — wer das Match gegeneinander gewonnen hat, falls es eins gab. Ein Unentschieden hilft hier niemandem.</li>
+<li><strong>Stechen (Bo1)</strong> — nur wenn es um den Einzug ins Halbfinale geht: ein einzelnes Spiel, am Tag nach der letzten Runde, gleiche Stichzeit-Regel. Sind mehr als zwei Leute völlig gleichauf, entscheidet die Setzliste.</li>
+</ol>
+
+<h4>Halbfinale und Finale</h4>
+<p>Die besten vier spielen <strong>1. gegen 4.</strong> und <strong>2. gegen 3.</strong> Für das Halbfinale habt ihr drei Tage, dann ist ein Tag Pause, dann drei Tage fürs Finale. Wer früher fertig ist, darf früher weiterspielen.</p>
+
+<h4>Online oder offline</h4>
+<p>Ihr entscheidet selbst, wie ihr spielt.</p>
+<ul>
+<li><strong>Offline</strong> am echten Brett: Eine*r meldet die Punkte hier im Reiter — in der Gruppenphase beide Spiele zusammengezählt —, die Gegenseite bestätigt. Die App erkennt daraus, wer gewonnen hat oder ob es unentschieden steht. Stimmt es nicht, lehnt sie ab, und ihr meldet neu. Wird eine Meldung nicht beantwortet, gilt sie um Mitternacht nach der Stichzeit als bestätigt.</li>
+<li><strong>Online</strong> in der App: „Online spielen" legt die Partie an. Ist ein Spiel vorbei und das Match noch nicht fertig, startet das nächste Spiel von selbst, die Farben werden jedes Mal neu verlost.</li>
+</ul>
+
+<h4>Zugzeit online</h4>
+<p>Online hast du für jeden Zug <strong>1 Minute</strong>, vom Beginn deines Zugs bis „Zug beenden". Die Uhr steht über dem Brett. Läuft sie ab, ist das Spiel vorbei und wird gewertet, <strong>als hätte die Gegenseite alle Steine schon draußen</strong> — also je nach Stellung 1, 2 oder 3 Punkte für sie.</p>
+<p>Die Uhr kann <strong>pausiert</strong> werden: Eine*r fragt an, die andere Seite muss zustimmen. Weiter geht es, sobald eine*r „Weiter" tippt.</p>
+<p>Wichtig: Die Uhr läuft auch weiter, wenn ihr die App schließt — der Server wertet abgelaufene Zeit innerhalb von ein, zwei Minuten. Wer ein Online-Spiel unterbrechen will, pausiert vorher. Der Eröffnungswurf hat keine Zeitbegrenzung.</p>
+
+<h4>Stichzeit: 20 Uhr am letzten Tag</h4>
+<p>Ist ein Match am letzten Tag seiner Runde um <strong>20:00 Uhr</strong> nicht beendet, legt die App automatisch eine Online-Partie an, und ihr bekommt beide Bescheid. Dann habt ihr <strong>15 Minuten</strong>, um beizutreten — beigetreten ist, wer die Partie öffnet.</p>
+<ul>
+<li>Treten beide bei, wird das Match online zu Ende gespielt, mit Zugzeit.</li>
+<li>Tritt nur eine*r bei, bekommt diese Person einen <strong>Admin-Sieg</strong>. In der Gruppenphase zählt jedes noch nicht gespielte Spiel als einfacher Sieg für sie, im K.-o. bekommt sie die Zielpunkte.</li>
+<li>Tritt niemand bei, <strong>scheiden beide aus</strong> dem Turnier aus.</li>
+</ul>
+<p>Punkte, die ihr in dem Match schon online gesammelt habt, bleiben dabei stehen.</p>
+`;
+
+// ================= Turnier =================
+let turnierTeil = [], turnierMatches = [], turnierGeladen = false, turnierUhrTakt = null, zeitablaufGemeldet = "";
+const TPLAN = turnierZeitplan();
+const istAdmin = () => { const m = ich(); return !!m && nameOf(m).toLowerCase().includes("anton"); };
+const tWann = (t) => new Date(t).toLocaleString("de-DE", { timeZone: TURNIER.zeitzone, weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+const tTag = (d) => new Date(d + "T12:00:00").toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit" });
+const tPhasenName = (m) => m.phase === "swiss" ? `Runde ${m.runde}` : m.phase === "stechen" ? "Stechen" : m.phase === "halbfinale" ? "Halbfinale" : "Finale";
+const turnierMatch = (id) => turnierMatches.find(m => m.id === id);
+const tFormat = (m) => turnierIstAnzahl(m) ? `${TURNIER.swissSpiele} Spiele` : m.ziel === 1 ? "ein Spiel" : `bis ${m.ziel} Punkte`;
+const tZahl = (x) => String(x).replace(".", ",");
+
+async function turnierLaden(){
+  try {
+    const [a, b] = await Promise.all([
+      withTimeout(db.from("turnier_teilnahmen").select("*").eq("turnier", TURNIER.id)),
+      withTimeout(db.from("turnier_matches").select("*").eq("turnier", TURNIER.id)),
+    ]);
+    if (a && !a.error && a.data) turnierTeil = a.data;
+    if (b && !b.error && b.data) turnierMatches = b.data;
+    turnierGeladen = !(a && a.error) && !(b && b.error);
+  } catch (e) {}
+}
+
+function turnierEingang(tabelle, zeile){
+  if (!zeile) return;
+  if (tabelle === "turnier_matches"){
+    const i = turnierMatches.findIndex(m => m.id === zeile.id);
+    if (i >= 0) turnierMatches[i] = { ...turnierMatches[i], ...zeile }; else turnierMatches.push(zeile);
+  } else {
+    const i = turnierTeil.findIndex(t => t.spieler === zeile.spieler && t.turnier === zeile.turnier);
+    if (i >= 0) turnierTeil[i] = { ...turnierTeil[i], ...zeile }; else turnierTeil.push(zeile);
+  }
+  turnierZeigen();
+  if (!$("boardView").classList.contains("hidden")) uhrZeigen();
+}
+
+// Was ist gerade dran?
+function turnierLage(jetzt = Date.now()){
+  if (jetzt < TPLAN.anmeldungEnde) return { art: "anmeldung" };
+  if (!turnierMatches.length) return { art: turnierTeil.filter(t => t.status !== "ausgeschieden").length < TURNIER.mindestens ? "abgesagt" : "wartet" };
+  const fin = turnierMatches.find(m => m.phase === "finale");
+  if (fin && fin.status === "fertig") return { art: "vorbei", sieger: fin.sieger };
+  const reihenfolge = ["finale", "halbfinale", "stechen", "swiss"];
+  for (const ph of reihenfolge){
+    const liste = turnierMatches.filter(m => m.phase === ph);
+    if (!liste.length) continue;
+    const runde = Math.max(...liste.map(m => m.runde));
+    return { art: "laeuft", phase: ph, runde, matches: liste.filter(m => m.runde === runde) };
+  }
+  return { art: "wartet" };
+}
+
+function tMatchZeile(m, mitKnoepfen){
+  const mich = ich();
+  const n = (id) => id ? escHtml(nameOf(id)) : "Freilos";
+  const kl = (id) => m.status === "fertig" && m.sieger === id ? "sieger" : "";
+  const erg = !m.p2 ? "—" : m.status === "fertig" || (m.spiele || []).length ? `${m.punkte1 || 0}:${m.punkte2 || 0}` : "";
+  let info = "";
+  if (!m.p2) info = "Freilos — zählt als gewonnenes Match";
+  else if (m.status === "fertig") info = m.art === "admin" ? "Admin-Sieg (Gegenseite nicht beigetreten)" : m.art === "beide_raus" ? "Beide nicht beigetreten — beide ausgeschieden"
+      : (turnierIstRemis(m) ? "unentschieden · " : "") + (m.art === "offline" ? "offline gespielt" : m.art === "online" ? "online gespielt" : "");
+  else if (m.status === "gemeldet") info = `${escHtml(nameOf(m.gemeldet.von))} meldet ${m.gemeldet.punkte1}:${m.gemeldet.punkte2} — wartet auf Bestätigung`;
+  else if (m.pflicht && !m.pflicht.ausgewertet) info = `Pflichtspiel läuft — beitreten bis ${tWann(m.pflicht.bis).slice(-5)} Uhr`;
+  else info = `${tFormat(m)} · spätestens ${tWann(m.frist)}`;
+  let knoepfe = "";
+  if (mitKnoepfen && istAdmin() && m.p2 && m.status !== "fertig" && m.p1 !== mich && m.p2 !== mich)
+    knoepfe = `<div class="knoepfe"><button class="ghost" data-t-admin="${m.id}">Ergebnis eintragen (Admin)</button></div>`;
+  return `<div class="tmatch">
+    <div class="wer"><span class="${kl(m.p1)}">${m.p1 ? avatar(m.p1, 20) : ""} ${n(m.p1)}</span><span class="gegen">gegen</span><span class="${kl(m.p2)}">${m.p2 ? avatar(m.p2, 20) : ""} ${n(m.p2)}</span></div>
+    <div class="erg">${erg}</div>
+    <div class="info">${info}</div>${knoepfe}</div>`;
+}
+
+function tMeinMatchHtml(m){
+  const mich = ich();
+  const gegner = m.p1 === mich ? m.p2 : m.p1;
+  const meine = m.p1 === mich ? (m.punkte1 || 0) : (m.punkte2 || 0), seine = m.p1 === mich ? (m.punkte2 || 0) : (m.punkte1 || 0);
+  const kopf = `<p class="was">${avatar(gegner, 28)}${tPhasenName(m)}: gegen ${escHtml(nameOf(gegner))}</p>`;
+  if (!m.p2) return `<div class="forderung"><p class="was">${tPhasenName(m)}: Freilos</p><p class="wann">Zählt als gewonnenes Match. Diese Runde hast du frei.</p></div>`;
+  if (m.status === "fertig"){
+    const gewonnen = m.sieger === mich;
+    const wie = m.art === "admin" ? (gewonnen ? " (Admin-Sieg)" : " (nicht beigetreten)") : m.art === "beide_raus" ? " — beide ausgeschieden" : "";
+    const was = m.sieger ? (gewonnen ? "Gewonnen" : "Verloren") : turnierIstRemis(m) ? "Unentschieden" : "Keine Wertung";
+    return `<div class="forderung">${kopf}<p class="wann">${was} · Punkte ${meine}:${seine}${wie}</p></div>`;
+  }
+  const pflichtJetzt = m.pflicht && !m.pflicht.ausgewertet && Date.now() < m.pflicht.bis;
+  const binDa = (m.p1 === mich && m.beitritt1) || (m.p2 === mich && m.beitritt2);
+  if (pflichtJetzt) return `<div class="forderung">${kopf}<p class="wann"><strong>Pflichtspiel!</strong> Die Stichzeit ist vorbei. ${binDa ? "Du bist beigetreten — jetzt wird gespielt." : `Tritt bis ${tWann(m.pflicht.bis).slice(-5)} Uhr bei, sonst gilt das Match als verloren.`}</p>
+    <div class="knoepfe"><button class="btn" data-t-online="${m.id}">${binDa ? "Zur Partie" : "Jetzt beitreten"}</button></div></div>`;
+  if (m.status === "gemeldet"){
+    if (m.gemeldet.von === mich) return `<div class="forderung">${kopf}<p class="wann">Du hast ${m.gemeldet.punkte1}:${m.gemeldet.punkte2} gemeldet (${escHtml(nameOf(m.p1))} zuerst). ${escHtml(nameOf(gegner))} muss noch bestätigen — sonst gilt es um Mitternacht nach der Stichzeit als bestätigt.</p>
+      <div class="knoepfe"><button class="ghost" data-t-zurueck="${m.id}">Meldung zurückziehen</button></div></div>`;
+    const deutung = (() => { const pr = turnierOfflinePruefen(m, m.gemeldet.punkte1, m.gemeldet.punkte2); return pr.ok ? (pr.sieger ? `${nameOf(pr.sieger)} gewinnt` : "unentschieden") : ""; })();
+    return `<div class="forderung">${kopf}<p class="wann">${escHtml(nameOf(m.gemeldet.von))} meldet <strong>${m.gemeldet.punkte1}:${m.gemeldet.punkte2}</strong> (${escHtml(nameOf(m.p1))} zuerst) — ${escHtml(deutung)}. Stimmt das?</p>
+      <div class="knoepfe"><button class="btn" data-t-ja="${m.id}">Bestätigen</button><button class="ghost" data-t-nein="${m.id}">Stimmt nicht</button></div></div>`;
+  }
+  const laeuft = (m.spiele || []).length > 0;
+  const standText = !laeuft ? "" : turnierIstAnzahl(m) ? ` · nach ${(m.spiele || []).length} von ${TURNIER.swissSpiele} Spielen ${meine}:${seine}` : ` · Stand ${meine}:${seine}`;
+  return `<div class="forderung">${kopf}<p class="wann">${tFormat(m)}${standText} · spätestens ${tWann(m.frist)}</p>
+    <div class="knoepfe"><button class="btn" data-t-online="${m.id}">${laeuft ? "Online weiterspielen" : "Online spielen"}</button>${laeuft ? "" : `<button class="ghost" data-t-offline="${m.id}">Offline-Ergebnis melden</button>`}</div></div>`;
+}
+
+function turnierZeigen(){
+  turnierZaehlerSetzen();
+  if ($("turnierView").classList.contains("hidden")) return;
+  const mich = ich(), lage = turnierLage();
+  const zeig = (id, an) => $(id).classList.toggle("hidden", !an);
+  const angemeldet = turnierTeil.filter(t => t.status !== "abgemeldet");
+  // Kopf
+  if (!turnierGeladen && !turnierTeil.length && !turnierMatches.length){
+    $("tPhase").textContent = "Noch nicht eingerichtet";
+    $("tPhaseText").textContent = "Die Turnier-Tabellen fehlen noch in der Datenbank.";
+  } else if (lage.art === "anmeldung"){
+    const tage = Math.ceil((TPLAN.anmeldungEnde - Date.now()) / 86400000);
+    $("tPhase").textContent = "Anmeldung läuft";
+    $("tPhaseText").textContent = `Noch ${tage} ${tage === 1 ? "Tag" : "Tage"} — bis ${tTag(TURNIER.anmeldungBis)}, 23:59 Uhr. Danach wird Runde 1 nach der Elo-Rangliste ausgelost.`;
+  } else if (lage.art === "abgesagt"){
+    $("tPhase").textContent = "Zu wenige Anmeldungen";
+    $("tPhaseText").textContent = `Für das Turnier braucht es mindestens ${TURNIER.mindestens} Leute.`;
+  } else if (lage.art === "wartet"){
+    $("tPhase").textContent = "Auslosung folgt";
+    $("tPhaseText").textContent = "Die nächste Runde wird in Kürze ausgelost.";
+  } else if (lage.art === "vorbei"){
+    $("tPhase").innerHTML = `${avatar(lage.sieger, 30)} ${escHtml(nameOf(lage.sieger))} gewinnt!`;
+    $("tPhaseText").textContent = `Das ${TURNIER.name} ist entschieden. Glückwunsch!`;
+  } else {
+    const p = TPLAN.phasen.find(x => x.phase === lage.phase && (lage.phase !== "swiss" || x.runde === lage.runde));
+    const offen = lage.matches.filter(m => m.status !== "fertig").length;
+    $("tPhase").textContent = lage.phase === "swiss" ? `Gruppenphase · Runde ${lage.runde} von ${TURNIER.swissRunden}` : tPhasenName(lage.matches[0]);
+    $("tPhaseText").textContent = offen ? `${offen} ${offen === 1 ? "Match" : "Matches"} offen · Stichzeit ${tWann(p.frist)}` : "Alle Matches gespielt — die nächste Auslosung folgt.";
+  }
+  // Mein Match
+  const meins = mich ? turnierMatches.filter(m => m.p1 === mich || m.p2 === mich).sort((a, b) => b.runde - a.runde)[0] : null;
+  zeig("tMeinPanel", !!meins && lage.art === "laeuft" || (!!meins && lage.art === "vorbei"));
+  if (meins) $("tMein").innerHTML = tMeinMatchHtml(meins);
+  // Anmeldung
+  zeig("tAnmeldePanel", lage.art === "anmeldung" || (lage.art !== "laeuft" && lage.art !== "vorbei"));
+  const binDabei = mich && angemeldet.some(t => t.spieler === mich);
+  $("tAnmeldung").innerHTML = `<div class="konvleiste" style="flex-wrap:wrap;border:none">${angemeldet.length
+      ? angemeldet.map(t => `<span class="avatar-name">${avatar(t.spieler, 24)} ${escHtml(nameOf(t.spieler))}${t.seed ? ` <small>(${t.seed})</small>` : ""}</span>`).join("")
+      : `<p class="empty">Noch niemand angemeldet.</p>`}</div>
+    ${lage.art === "anmeldung" ? (mich
+      ? `<button class="${binDabei ? "ghost" : "btn"}" data-t-anmelden="${binDabei ? "ab" : "an"}" style="width:100%;margin-top:10px">${binDabei ? "Wieder abmelden" : "Ich bin dabei!"}</button>`
+      : `<p class="note">Zum Anmelden muss dieses Gerät einer Person zugeordnet sein (Extras → Einstellungen).</p>`) : ""}`;
+  // K.-o.
+  const ko = turnierMatches.filter(m => m.phase === "halbfinale" || m.phase === "finale");
+  zeig("tKoPanel", ko.length > 0);
+  $("tKo").innerHTML = ko.sort((a, b) => a.runde - b.runde).map(m => `<p class="note" style="margin:10px 0 0">${tPhasenName(m)}</p>` + tMatchZeile(m, true)).join("");
+  // Aktuelle Runde / Stechen
+  const runde = lage.art === "laeuft" && (lage.phase === "swiss" || lage.phase === "stechen") ? lage.matches : [];
+  zeig("tRundePanel", runde.length > 0);
+  $("tRundeTitel").textContent = runde.length ? `Paarungen · ${tPhasenName(runde[0])}` : "Paarungen";
+  $("tRunde").innerHTML = runde.map(m => tMatchZeile(m, true)).join("");
+  // Tabelle
+  const swiss = turnierMatches.filter(m => m.phase === "swiss");
+  zeig("tTabellePanel", swiss.length > 0);
+  if (swiss.length){
+    const tab = turnierTabelle(turnierTeil.filter(t => t.status !== "abgemeldet"), turnierMatches);
+    const weiter = new Set(turnierKoAuswahl(tab, TURNIER.koPlaetze).weiter.map(x => x.spieler));
+    let letzteWeiter = -1; tab.forEach((x, i) => { if (weiter.has(x.spieler)) letzteWeiter = i; });
+    $("tTabelle").innerHTML = `<table class="ttab"><tr><th>#</th><th>Name</th><th>S</th><th>BH</th><th>Diff</th></tr>${tab.map((x, i) =>
+      `<tr class="${i === letzteWeiter && i < tab.length - 1 ? "schnitt" : ""} ${x.status === "ausgeschieden" ? "raus" : ""} ${x.spieler === mich ? "ich" : ""}"><td>${x.platz}</td>
+        <td><span class="namezeile">${avatar(x.spieler, 22)}${escHtml(nameOf(x.spieler))}</span></td><td>${tZahl(x.siege)}</td><td>${tZahl(x.buchholz)}</td><td>${x.diff > 0 ? "+" : ""}${x.diff}</td></tr>`).join("")}</table>`;
+  }
+  // Frühere Runden
+  const frueher = [];
+  for (let r = 1; r <= TURNIER.swissRunden; r++){
+    const l = swiss.filter(m => m.runde === r);
+    if (l.length && !(lage.phase === "swiss" && lage.runde === r)) frueher.push(`<p class="note" style="margin:10px 0 0">Runde ${r}</p>` + l.map(m => tMatchZeile(m, false)).join(""));
+  }
+  zeig("tFruehPanel", frueher.length > 0);
+  $("tFrueh").innerHTML = frueher.join("");
+  // Zeitplan und Regeln
+  const jetzt = Date.now();
+  $("tPlan").innerHTML = `<div class="tplan">
+    <span class="${jetzt < TPLAN.anmeldungEnde ? "jetzt" : ""}">bis ${tTag(TURNIER.anmeldungBis)}</span><span>Anmeldung (bis 23:59 Uhr)</span>
+    ${TPLAN.phasen.map(p => `<span class="${jetzt >= p.ab && jetzt < p.frist + 4 * 3600000 ? "jetzt" : ""}">${p.start === p.letzter ? tTag(p.start) : tTag(p.start) + " – " + tTag(p.letzter)}</span>
+      <span>${p.phase === "swiss" ? `Gruppenphase, Runde ${p.runde} · ${TURNIER.swissSpiele} Spiele` : p.phase === "stechen" ? "Stechen (nur bei Gleichstand) · 1 Spiel" : `${p.phase === "halbfinale" ? "Halbfinale" : "Finale"} · bis ${p.ziel} Punkte`} · Stichzeit 20:00</span>`).join("")}
+  </div>`;
+  if (!$("tRegeln").dataset.fertig){ $("tRegeln").innerHTML = TURNIER_REGELN; $("tRegeln").dataset.fertig = "1"; }
+}
+
+// Rote Zahl am Reiter: wo muss ich etwas tun?
+function turnierZaehlerSetzen(){
+  const z = $("turnierZaehler"); if (!z) return;
+  const mich = ich();
+  let n = 0;
+  if (mich) turnierMatches.forEach(m => {
+    if (m.status === "fertig" || !m.p2 || (m.p1 !== mich && m.p2 !== mich)) return;
+    if (m.status === "gemeldet" && m.gemeldet && m.gemeldet.von !== mich) n++;
+    else if (m.pflicht && !m.pflicht.ausgewertet && Date.now() < m.pflicht.bis && !((m.p1 === mich && m.beitritt1) || (m.p2 === mich && m.beitritt2))) n++;
+  });
+  z.textContent = n; z.classList.toggle("hidden", n === 0);
+}
+
+// ---------- Aktionen ----------
+async function turnierAnmelden(an){
+  const mich = ich(); if (!mich || Date.now() >= TPLAN.anmeldungEnde) return;
+  try {
+    const r = an ? await withTimeout(db.from("turnier_teilnahmen").upsert({ turnier: TURNIER.id, spieler: mich, status: "dabei" }))
+                 : await withTimeout(db.from("turnier_teilnahmen").delete().eq("turnier", TURNIER.id).eq("spieler", mich));
+    if (r && r.error) throw new Error(r.error.message);
+  } catch (e) { dialog("Das hat nicht geklappt", String(e.message || e), [{ text: "OK", wert: true, art: "leise" }]); return; }
+  await turnierLaden(); turnierZeigen();
+}
+
+async function turnierMatchSetzen(m, aenderung){
+  const r = await withTimeout(db.from("turnier_matches").update({ ...aenderung, updated_at: new Date().toISOString() }).eq("id", m.id));
+  if (r && r.error) throw new Error(r.error.message);
+  Object.assign(m, aenderung);
+}
+
+async function turnierSpieleVon(m){
+  try { const r = await withTimeout(db.from("games").select("*").eq("turnier_match", m.id)); return (r && r.data) || []; } catch (e) { return []; }
+}
+
+async function turnierOnline(m){
+  const mich = ich();
+  const alle = await turnierSpieleVon(m);
+  let g = alle.find(x => x.status === "laufend" && x.state && !x.state.gewinner);
+  if (!g){
+    try {
+      const nrNeu = alle.reduce((a, x) => Math.max(a, x.turnier_spiel || 0), 0) + 1;
+      const r = await withTimeout(db.from("games").insert(turnierNeuesSpiel(m, nrNeu)).select());
+      if (r && r.error) throw new Error(r.error.message);
+      g = r.data[0];
+      const gegner = m.p1 === mich ? m.p2 : m.p1;
+      benachrichtigen(gegner, `${TURNIER.name}: los geht's`, `${nameOf(mich)} hat euer Match online eröffnet. Wirf deinen Eröffnungswürfel.`, g.id, "turnier");
+    } catch (e) {
+      const neu = (await turnierSpieleVon(m)).find(x => x.status === "laufend");      // gleichzeitig angelegt?
+      if (!neu){ dialog("Partie ließ sich nicht anlegen", String(e.message || e), [{ text: "OK", wert: true, art: "leise" }]); return; }
+      g = neu;
+    }
+  }
+  if (!games.some(x => x.id === g.id)) games.unshift(g);
+  await spielOeffnen(g, { frage: false });
+}
+
+// Pflichtspiel: Wer die Partie im Zeitfenster öffnet, ist beigetreten
+async function turnierBeitreten(g){
+  const mich = ich();
+  const m = g && g.turnier_match ? turnierMatch(g.turnier_match) : null;
+  if (!m || !mich || !m.pflicht || m.pflicht.ausgewertet) return;
+  const jetzt = Date.now();
+  if (jetzt < m.pflicht.ab || jetzt > m.pflicht.bis) return;
+  const feld = m.p1 === mich ? "beitritt1" : m.p2 === mich ? "beitritt2" : null;
+  if (!feld || m[feld]) return;
+  try { await turnierMatchSetzen(m, { [feld]: new Date(jetzt).toISOString() }); } catch (e) {}
+  turnierZeigen();
+}
+
+async function turnierOfflineMelden(m){
+  const anzahl = turnierIstAnzahl(m);
+  const max = anzahl ? 3 * TURNIER.swissSpiele : m.ziel + 2;
+  const optionen = () => Array.from({ length: max + 1 }, (_, i) => `<option value="${i}">${i}</option>`).join("");
+  const felder = `<div class="field"><label for="dlgP1">Punkte ${escHtml(nameOf(m.p1))}</label><select id="dlgP1">${optionen()}</select></div>
+                  <div class="field"><label for="dlgP2">Punkte ${escHtml(nameOf(m.p2))}</label><select id="dlgP2">${optionen()}</select></div>`;
+  const hinweis = anzahl
+    ? "Zwei Spiele: Tragt die Punkte beider Spiele zusammengezählt ein — 1 für einen einfachen Sieg, 2 für Gammon, 3 für Backgammon. Hat jede*r ein Spiel gewonnen, ist es unentschieden. Die Gegenseite bestätigt."
+    : `Gespielt wird bis ${m.ziel} Punkte. Die Gegenseite bestätigt.`;
+  const ok = await dialog("Offline-Ergebnis melden", hinweis, [{ text: "Melden", wert: true, art: "haupt" }, { text: "Abbrechen", wert: false, art: "leise" }], felder);
+  if (!ok) return;
+  const a = Number($("dlgP1").value), b = Number($("dlgP2").value);
+  const pr = turnierOfflinePruefen(m, a, b);
+  if (!pr.ok){ dialog("Ergebnis passt nicht", pr.grund, [{ text: "OK", wert: true, art: "leise" }]); return; }
+  const mich = ich();
+  const admin = istAdmin() && m.p1 !== mich && m.p2 !== mich;
+  try {
+    if (admin) await turnierMatchSetzen(m, { status: "fertig", punkte1: a, punkte2: b, sieger: pr.sieger, art: "offline", gemeldet: { von: mich, punkte1: a, punkte2: b, admin: true } });
+    else {
+      await turnierMatchSetzen(m, { status: "gemeldet", gemeldet: { von: mich, punkte1: a, punkte2: b, am: new Date().toISOString() } });
+      const gegner = m.p1 === mich ? m.p2 : m.p1;
+      const was = pr.sieger ? `${nameOf(pr.sieger)} gewinnt` : "unentschieden";
+      benachrichtigen(gegner, `${TURNIER.name}: Ergebnis bestätigen`, `${nameOf(mich)} meldet ${a}:${b} (${nameOf(m.p1)} zuerst) — ${was}. Stimmt das?`, "turnier:" + m.id, "turnier");
+    }
+  } catch (e) { dialog("Das hat nicht geklappt", String(e.message || e), [{ text: "OK", wert: true, art: "leise" }]); }
+  turnierZeigen();
+}
+
+async function turnierMeldungAntworten(m, ja){
+  const mich = ich(), g = m.gemeldet;
+  if (!g) return;
+  try {
+    if (ja){
+      const pr = turnierOfflinePruefen(m, g.punkte1, g.punkte2);
+      await turnierMatchSetzen(m, { status: "fertig", punkte1: g.punkte1, punkte2: g.punkte2, sieger: pr.ok ? pr.sieger : (g.punkte1 > g.punkte2 ? m.p1 : m.p2), art: "offline" });
+    }
+    else await turnierMatchSetzen(m, { status: "offen", gemeldet: null });
+  } catch (e) { return; }
+  if (g.von !== mich) benachrichtigen(g.von, ja ? "Ergebnis bestätigt" : "Ergebnis abgelehnt",
+    ja ? `${nameOf(mich)} hat ${g.punkte1}:${g.punkte2} bestätigt.` : `${nameOf(mich)} sagt, ${g.punkte1}:${g.punkte2} stimmt nicht. Klärt es und meldet neu.`, "turnier:" + m.id, "turnier");
+  turnierZeigen();
+}
+
+// Ein Turnierspiel ist zu Ende: ins Match übernehmen, ggf. nächstes Spiel anlegen
+let turnierNaechstes = null;
+async function turnierNachSpiel(g){
+  await turnierLaden();
+  const m = turnierMatch(g.turnier_match);
+  turnierNaechstes = null;
+  if (!m || m.status === "fertig") return;
+  const neu = turnierSpielWerten(m, { ...g, state: stand });
+  if (neu){ try { await turnierMatchSetzen(m, neu); } catch (e) { return; } }
+  if (m.status === "fertig"){
+    const text = m.sieger ? `${nameOf(m.sieger)} gewinnt, Punkte ${m.punkte1}:${m.punkte2}.` : `Unentschieden, Punkte ${m.punkte1}:${m.punkte2}.`;
+    [m.p1, m.p2].forEach(id => benachrichtigen(id, "Match beendet", text, "turnier:" + m.id, "turnier"));
+  } else {
+    const alle = await turnierSpieleVon(m);
+    let naechstes = alle.find(x => x.status === "laufend" && x.state && !x.state.gewinner);
+    if (!naechstes){
+      const nrNeu = alle.reduce((a, x) => Math.max(a, x.turnier_spiel || 0), 0) + 1;
+      try {
+        const r = await withTimeout(db.from("games").insert(turnierNeuesSpiel(m, nrNeu)).select());
+        if (r && !r.error && r.data) naechstes = r.data[0];
+      } catch (e) {}
+      if (!naechstes) naechstes = (await turnierSpieleVon(m)).find(x => x.status === "laufend");
+    }
+    if (naechstes){
+      turnierNaechstes = naechstes;
+      const gegner = g.p1 === ich() ? g.p2 : g.p1;
+      benachrichtigen(gegner, "Nächstes Spiel im Match", `Punkte ${m.punkte1}:${m.punkte2} (${tFormat(m)}). Das nächste Spiel wartet.`, naechstes.id, "turnier");
+    }
+  }
+  turnierZeigen();
+  ergebnisZeigen();
+}
+
+// ---------- Zugzeit ----------
+function uhrZeigen(){
+  const box = $("turnierUhr"); if (!box) return;
+  const g = aktuellesSpiel;
+  const m = g && g.turnier_match ? turnierMatch(g.turnier_match) : null;
+  const rest = m && stand ? turnierRestzeit(stand, m.pause, Date.now()) : null;
+  box.classList.toggle("hidden", rest === null || !!g.training);
+  if (rest === null) return;
+  const mich = ich(), meinSitz = sitz(g.id);
+  const pausiert = turnierPausiert(m.pause), anfrage = m.pause && m.pause.anfrage;
+  const sek = Math.max(0, Math.ceil(rest / 1000));
+  $("uhrZeit").textContent = pausiert ? "Pause" : `${Math.floor(sek / 60)}:${String(sek % 60).padStart(2, "0")}`;
+  $("uhrZeit").classList.toggle("knapp", !pausiert && sek <= 15);
+  const amZug = nameOf(stand.turn === 1 ? g.p1 : g.p2);
+  const k1 = $("uhrKnopf1"), k2 = $("uhrKnopf2");
+  k2.classList.add("hidden");
+  const spielerIn = meinSitz === 1 || meinSitz === 2;
+  if (pausiert){ $("uhrText").textContent = "Die Zugzeit ist angehalten."; k1.textContent = "Weiter"; k1.dataset.uhr = "weiter"; }
+  else if (anfrage && anfrage !== mich){ $("uhrText").textContent = `${nameOf(anfrage)} möchte pausieren.`; k1.textContent = "Annehmen"; k1.dataset.uhr = "annehmen";
+    k2.textContent = "Ablehnen"; k2.dataset.uhr = "ablehnen"; k2.classList.toggle("hidden", !spielerIn); }
+  else if (anfrage === mich){ $("uhrText").textContent = "Pause angefragt — wartet auf Zustimmung."; k1.textContent = "Zurückziehen"; k1.dataset.uhr = "ablehnen"; }
+  else { $("uhrText").textContent = `${amZug} ist am Zug · 1 Minute pro Zug`; k1.textContent = "Pause anfragen"; k1.dataset.uhr = "anfragen"; }
+  k1.classList.toggle("hidden", !spielerIn);
+  if (rest <= 0 && !pausiert) zeitablaufPruefen(rest);
+}
+
+async function uhrAktion(was){
+  const g = aktuellesSpiel, m = g && turnierMatch(g.turnier_match), mich = ich();
+  if (!m || !mich) return;
+  const p = { anfrage: null, intervalle: [...((m.pause && m.pause.intervalle) || [])] };
+  const jetzt = Date.now();
+  if (was === "anfragen") p.anfrage = mich;
+  if (was === "annehmen") p.intervalle.push({ von: jetzt });
+  if (was === "weiter") p.intervalle = p.intervalle.map(iv => iv.bis ? iv : { ...iv, bis: jetzt });
+  try { await turnierMatchSetzen(m, { pause: p }); } catch (e) {}
+  if (was === "anfragen"){ const gegner = m.p1 === mich ? m.p2 : m.p1; benachrichtigen(gegner, "Pause angefragt", `${nameOf(mich)} möchte die Zugzeit anhalten.`, g.id, "turnier"); }
+  uhrZeigen();
+}
+
+// Zeit abgelaufen: Die Gegenseite wertet sofort, die eigene App nach kurzer Gnadenfrist
+async function zeitablaufPruefen(rest){
+  const g = aktuellesSpiel;
+  if (!g || !g.turnier_match || !stand || stand.gewinner || g.status !== "laufend") return;
+  const meinSitz = sitz(g.id);
+  if (meinSitz !== 1 && meinSitz !== 2) return;
+  const verl = stand.turn;
+  if (meinSitz === verl && rest > -8000) return;
+  const schluessel = g.id + ":" + stand.zugBeginn;
+  if (zeitablaufGemeldet === schluessel) return;
+  zeitablaufGemeldet = schluessel;
+  const sieg = verl === 1 ? 2 : 1;
+  stand = klon(stand);
+  stand.gewinner = sieg; stand.art = turnierZeitWertung(stand, sieg); stand.zeitAblauf = verl; stand.zug = null;
+  verlauf = []; zugListe = [];
+  await partieAbschliessen();
+}
+
+function uhrStarten(){
+  clearInterval(turnierUhrTakt);
+  if (aktuellesSpiel && aktuellesSpiel.turnier_match) turnierUhrTakt = setInterval(uhrZeigen, 500);
+  uhrZeigen();
 }
 
 // ---------- Würfel fürs echte Brett ----------
@@ -4104,6 +4934,7 @@ async function spielOeffnen(g, { frage = true, ausVerlauf = false } = {}){
   if (g.status === "laufend") kanalOeffnen(g.id);
   brettZeichnen();
   chatLaden(g.id);
+  if (g.turnier_match){ turnierBeitreten(g); uhrStarten(); }
 }
 
 function sitzFragen(g){
@@ -4133,6 +4964,7 @@ async function eroeffnungSenden(meinSitz){
     if (versuch > 0 && basis.erst[meinSitz] != null){ stand = basis; brettZeichnen(); return; }
 
     stand = eroeffnungWuerfeln(basis, meinSitz, augen);
+    if (stand.phase === "spiel") stand.zugBeginn = Date.now();
     brettZeichnen();
     await spielSpeichern(false);
     await new Promise(r => setTimeout(r, 180 + Math.random() * 250));
@@ -4163,7 +4995,7 @@ async function abgleichen(){
     if (!r.error && r.data && r.data[0]){
       const frisch = r.data[0];
       const anders = JSON.stringify(frisch.state) !== JSON.stringify(stand) || frisch.status !== aktuellesSpiel.status;
-      if (anders && !istVeraltet(frisch.state) && !eigenerZugLaeuft(frisch.state && frisch.state.turn)){
+      if (anders && !istVeraltet(frisch.state) && !eigenerZugLaeuft(frisch.state && frisch.state.turn, frisch.state)){
         aktuellesSpiel = frisch;
         stand = frisch.state;
         versionMerken(stand);
@@ -4312,7 +5144,7 @@ function zeigeAnsicht(name, ausVerlauf, spielId){
     const gleich = jetzt.ansicht === name && (name !== "boardView" || jetzt.spiel === spielId);
     if (!gleich) history.pushState({ ansicht: name, spiel: spielId || null }, "");
   }
-  ["mainView","statsView","gamesView","boardView","diceView","chatView","settingsView"].forEach(v => {
+  ["mainView","statsView","gamesView","boardView","diceView","chatView","settingsView","turnierView"].forEach(v => {
     const el = $(v);
     if (el) el.classList.toggle("hidden", v !== name);
   });
@@ -4324,6 +5156,7 @@ function zeigeAnsicht(name, ausVerlauf, spielId){
     gamesView:    ["– Spielen", "Gegeneinander oder gegen den Computer"],
     boardView:    ["– Spielen", aktuellesSpiel && aktuellesSpiel.training ? "Training" : "Partie"],
     chatView:     ["– Chat",    "Gruppe und private Nachrichten"],
+    turnierView:  ["– Turnier", TURNIER.name],
     statsView:    ["– Extras",  "Statistik: wer wann vorn lag und warum"],
     diceView:     ["– Extras",  "Würfeln fürs echte Brett"],
     settingsView: ["– Extras",  "Einstellungen"],
@@ -4343,6 +5176,8 @@ function zeigeAnsicht(name, ausVerlauf, spielId){
   if (name === "diceView") wuerfelZeichnen();
   if (name === "gamesView"){ renderGames(); trainingSuchen(); }
   if (name === "chatView") nachrichtenZeigen();
+  if (name === "turnierView"){ turnierZeigen(); turnierLaden().then(turnierZeigen); }
+  if (name !== "boardView"){ clearInterval(turnierUhrTakt); turnierUhrTakt = null; }
   if (name === "settingsView") einstellungenZeigen();
   if (name === "mainView"){ forderungenZeigen(); fordernFormular(); }
   window.scrollTo(0, 0);
@@ -4360,7 +5195,7 @@ document.querySelectorAll("#unterNav [data-unter]").forEach(b => { b.onclick = (
 
 // Reiter per Wischen wechseln (nicht auf dem Spielbrett, nicht in Eingabefeldern, nicht am Bildschirmrand)
 (function wischen(){
-  const REIHE = ["mainView", "gamesView", "chatView", "extras"];
+  const REIHE = ["mainView", "turnierView", "gamesView", "chatView", "extras"];
   const EXTRAS = ["statsView", "diceView", "settingsView"];
   let start = null;
   const aktuell = () => {
@@ -4477,6 +5312,21 @@ $("undoBtn").onclick = async () => {
 };
 $("endBtn").onclick = zugAbschliessen;
 $("startTraining").onclick = trainingStarten;
+$("uhrKnopf1").onclick = () => uhrAktion($("uhrKnopf1").dataset.uhr);
+$("uhrKnopf2").onclick = () => uhrAktion($("uhrKnopf2").dataset.uhr);
+$("turnierWeiter").onclick = () => { if (turnierNaechstes){ const g = turnierNaechstes; if (!games.some(x => x.id === g.id)) games.unshift(g); spielOeffnen(g, { frage: false }); } };
+document.addEventListener("click", async (e) => {
+  const d = e.target.closest ? e.target.closest("[data-t-anmelden],[data-t-online],[data-t-offline],[data-t-ja],[data-t-nein],[data-t-zurueck],[data-t-admin]") : null;
+  if (!d) return;
+  const m = turnierMatch(d.dataset.tOnline || d.dataset.tOffline || d.dataset.tJa || d.dataset.tNein || d.dataset.tZurueck || d.dataset.tAdmin);
+  if (d.dataset.tAnmelden) return turnierAnmelden(d.dataset.tAnmelden === "an");
+  if (!m) return;
+  if (d.dataset.tOnline) return turnierOnline(m);
+  if (d.dataset.tOffline || d.dataset.tAdmin) return turnierOfflineMelden(m);
+  if (d.dataset.tJa) return turnierMeldungAntworten(m, true);
+  if (d.dataset.tNein) return turnierMeldungAntworten(m, false);
+  if (d.dataset.tZurueck){ try { await turnierMatchSetzen(m, { status: "offen", gemeldet: null }); } catch (err) {} turnierZeigen(); }
+});
 $("nachrichtSenden").onclick = nachrichtSenden;
 $("nachrichtText").addEventListener("keydown", (e) => { if (e.key === "Enter"){ e.preventDefault(); nachrichtSenden(); } });
 $("fordSenden").onclick = fordern;

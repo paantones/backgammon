@@ -34,6 +34,9 @@ self.addEventListener("push", (e) => {
   } else if (k.startsWith("nachricht:")){
     const konv = k.slice(10); spiel = null; tag = "nachricht-" + konv; ziel = { typ: "chat", konv };
     stillWenn = (a) => a.chat === konv;
+  } else if (k.startsWith("turnier:")){
+    spiel = null; tag = "turnier-" + k.slice(8); ziel = { typ: "turnier" };
+    stillWenn = (a) => a.ansicht === "turnierView";
   } else if (k.startsWith("herausforderung:")){
     spiel = null; tag = "herausforderung-" + k.slice(16); ziel = { typ: "liga" };
     stillWenn = (a) => a.ansicht === "mainView";
@@ -72,7 +75,7 @@ self.addEventListener("notificationclick", (e) => {
   const ziel = daten.ziel || (daten.spiel ? { typ: "spiel", id: daten.spiel } : { typ: "spielen" });
   const adresse = ziel.typ === "spiel" ? "/#spiel=" + ziel.id
                 : ziel.typ === "chat" ? "/#chat=" + encodeURIComponent(ziel.konv)
-                : ziel.typ === "liga" ? "/#liga" : "/#spielen";
+                : ziel.typ === "liga" ? "/#liga" : ziel.typ === "turnier" ? "/#turnier" : "/#spielen";
   e.waitUntil((async () => {
     const fenster = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
     for (const f of fenster){
