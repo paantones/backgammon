@@ -1378,12 +1378,6 @@ function fakten(){
     F.push(["Fleißigste*r Schreiber*in", besitzer ? nameOf(besitzer) : "ein unbekanntes Gerät", `${partien(eg[1])} eingetragen`]);
   }
 
-  // Schnüffelei
-  const schnueffler = {};
-  spyLog.forEach(z => zaehl(schnueffler, z.actor));
-  const sn = besteZeile(schnueffler);
-  if (sn) F.push(["Größte Neugier", `${nameOf(sn[0])}`, `${sn[1]}× geschnüffelt`]);
-
   // Vielspieler*in und Kurzer Prozess
   let kurz = null;
   players.forEach(p => {
@@ -1477,11 +1471,12 @@ function renderSpy(){
     return;
   }
   if (panel) panel.classList.remove("hidden");
+  const vorEinerWoche = Date.now() - 7 * 86400000;            // Älteres wird nicht mehr gezeigt
   const treffer = spyLog
-    .filter(z => z.target === mich)
+    .filter(z => z.target === mich && new Date(z.created_at).getTime() >= vorEinerWoche)
     .sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
   if (treffer.length === 0){
-    box.innerHTML = `<p class="empty">Noch niemand.</p>`;
+    box.innerHTML = `<p class="empty">In den letzten sieben Tagen niemand.</p>`;
     return;
   }
   box.innerHTML = treffer.map(z => {
