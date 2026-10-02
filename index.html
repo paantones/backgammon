@@ -64,6 +64,7 @@ h1{font-family:'Fraunces',Georgia,serif;font-weight:800;font-size:clamp(30px,7vw
 #board{display:block;width:100%;height:auto;margin:4px 0 10px;touch-action:manipulation}
 .brettbox{position:relative}
 .zugleiste .btn{flex:1}
+.ghost.aufgeben{color:#8C3226;border-color:rgba(140,50,38,.45)}
 .turnierphase{font-family:'Fraunces',Georgia,serif;font-size:21px;margin:0}
 .tmatch{border-top:1px solid var(--line);padding:10px 0;display:grid;grid-template-columns:1fr auto;gap:6px 10px;align-items:center}
 .tmatch:first-child{border-top:none}
@@ -471,6 +472,7 @@ ul.log li.edit .btn{width:auto;padding:9px 16px}
           <button class="ghost hidden" id="uhrKnopf2"></button>
         </div>
         <button class="ghost hidden" id="letzterBtn" style="width:100%;margin-top:10px;padding:10px">Letzten Zug anzeigen</button>
+        <button class="ghost hidden aufgeben" id="aufgebenBtn" style="width:100%;margin-top:8px;padding:10px"></button>
         <p class="note" id="boardHinweis">Tipp auf einen eigenen Stein, dann auf das Ziel.</p>
       </div>
 
@@ -2878,13 +2880,14 @@ function brettStatus(){
   // Eröffnung
   if (stand.phase === "eroeffnung"){
     const meins = stand.erst[meinSitz], seins = stand.erst[meinSitz === 1 ? 2 : 1];
-    $("boardStatus").textContent = meins == null
-      ? "Eröffnungswurf — du bist dran"
+    const nochmal = stand.gleichstand && meins == null;
+    $("boardStatus").textContent = eroeffnungUnterwegs ? "Dein Wurf wird übertragen …"
+      : meins == null ? (nochmal ? `Gleich hoch (${stand.gleichstand}) — noch einmal werfen` : "Eröffnungswurf — du bist dran")
       : (seins == null ? `Eröffnungswurf — warten auf ${namen[meinSitz === 1 ? 2 : 1]}` : "gleich hoch, noch einmal");
-    zeig("rollBtn", true); $("rollBtn").disabled = meins != null;
+    zeig("rollBtn", true); $("rollBtn").disabled = meins != null || eroeffnungUnterwegs;
     zeig("endBtn", false);
     zeig("undoBtn", false);
-    $("boardHinweis").textContent = "Beide werfen einen Würfel. Wer höher wirft, beginnt und spielt beide Augen.";
+    if (!eroeffnungUnterwegs) $("boardHinweis").textContent = "Beide werfen einen Würfel. Wer höher wirft, beginnt und spielt beide Augen.";
     return;
   }
 
@@ -2959,6 +2962,7 @@ function brettZeichnen(){
       ? "Tipp auf „Weiter“, dann zieht der Computer."
       : "Tipp aufs Brett, um zur aktuellen Stellung zurückzukehren.";
   }
+  aufgebenKnopfZeigen();
   const lb = $("letzterBtn");
   if (lb){
     const lz = stand && stand.letzterZug;
@@ -2993,7 +2997,13 @@ function ergebnisZeigen(){
   const namen = { 1: nameOf(aktuellesSpiel.p1), 2: nameOf(aktuellesSpiel.p2) };
   const art = stand.art === 3 ? "Backgammon" : stand.art === 2 ? "Gammon" : "einfacher Sieg";
   const punkte = stand.art;
-  if (meinSitz === stand.gewinner){
+  if (stand.aufgegeben && meinSitz === stand.aufgegeben){
+    $("endTitel").textContent = "Aufgegeben.";
+    $("endSub").textContent = `${namen[stand.gewinner]} gewinnt — ${art}, ${punkte} ${punkte === 1 ? "Punkt" : "Punkte"}${aktuellesSpiel.turnier_match ? " fürs Turnier-Match" : aktuellesSpiel.training ? "" : " für die Liga"}.`;
+  } else if (stand.aufgegeben && meinSitz === stand.gewinner){
+    $("endTitel").textContent = "Glückwunsch!";
+    $("endSub").textContent = `${namen[stand.aufgegeben]} hat aufgegeben — ${art}, ${punkte} ${punkte === 1 ? "Punkt" : "Punkte"}${aktuellesSpiel.turnier_match ? " fürs Turnier-Match" : " für die Liga"}.`;
+  } else if (meinSitz === stand.gewinner){
     $("endTitel").textContent = "Glückwunsch!";
     $("endSub").textContent = aktuellesSpiel.turnier_match
       ? `Du hast gewonnen — ${stand.zeitAblauf ? "Zeitablauf der Gegenseite, " : ""}${art}, ${punkte} ${punkte === 1 ? "Punkt" : "Punkte"} fürs Turnier-Match.`
@@ -3005,7 +3015,7 @@ function ergebnisZeigen(){
       : `${namen[stand.gewinner]} gewinnt — ${art}. Revanche?`;
   } else {
     $("endTitel").textContent = `${namen[stand.gewinner]} gewinnt`;
-    $("endSub").textContent = art;
+    $("endSub").textContent = stand.aufgegeben ? `${namen[stand.aufgegeben]} hat aufgegeben — ${art}` : art;
   }
 
   {
@@ -3298,7 +3308,7 @@ async function partieAbschliessen(){
     letztenZugMerken();
     zugArchivieren(stand.letzterZug, stand);
   }
-  if (training && stand.turn === 1){
+  if (training && stand.turn === 1 && !stand.aufgegeben){
     const b = zugBasisVoll();
     trainingZugSchreiben(b, stand, (stand.zug ? stand.zug.liste : zugListe).slice(), 1);
     nachbetrachtung(b, stand);                                    // letzter eigener Zug
@@ -3314,7 +3324,10 @@ async function partieAbschliessen(){
   nachOnlinePartie(aktuellesSpiel);
   {
     const g = aktuellesSpiel, art = stand.art === 3 ? "Backgammon" : stand.art === 2 ? "Gammon" : "einfacher Sieg";
-    benachrichtigen(gegnerVon(g, stand.gewinner), "Partie vorbei", `${nameOf(spielerVon(g, stand.gewinner))} hat gewonnen — ${art}.`, g.id);
+    if (stand.aufgegeben)
+      benachrichtigen(spielerVon(g, stand.gewinner), "Aufgegeben", `${nameOf(spielerVon(g, stand.aufgegeben))} hat aufgegeben — du gewinnst: ${art}, ${stand.art} ${stand.art === 1 ? "Punkt" : "Punkte"}.`, g.id);
+    else
+      benachrichtigen(gegnerVon(g, stand.gewinner), "Partie vorbei", `${nameOf(spielerVon(g, stand.gewinner))} hat gewonnen — ${art}.`, g.id);
   }
 }
 
@@ -3421,6 +3434,60 @@ function zugArchivieren(lz, nachher){
       }));
     } catch (e) { /* Archiv ist Beiwerk — das Spiel läuft weiter */ }
   }, 60);
+}
+
+// ---------- Aufgeben ----------
+// Gewertet wird, als hätte die Gegenseite jetzt alle Steine draußen: Steine noch auf der
+// gegnerischen Hälfte oder auf der Bar → 3, noch keiner draußen → 2, sonst 1.
+const artName = (p) => p === 3 ? "Backgammon" : p === 2 ? "Gammon" : "einfacher Sieg";
+
+function aufgebenKnopfZeigen(){
+  const k = $("aufgebenBtn");
+  if (!k) return;
+  const g = aktuellesSpiel;
+  const meinSitz = g ? sitz(g.id) : null;
+  let zeigen = !!(g && stand && stand.phase === "spiel" && !stand.gewinner && g.status === "laufend"
+                  && (meinSitz === 1 || meinSitz === 2) && !vorschauAktiv);
+  if (zeigen && g.training) zeigen = stand.turn === 1 && !weiterFreigabe;
+  k.classList.toggle("hidden", !zeigen);
+  if (!zeigen) return;
+  const p = turnierZeitWertung(stand, meinSitz === 1 ? 2 : 1);
+  k.textContent = `Aufgeben — kostet ${p} ${p === 1 ? "Punkt" : "Punkte"} (${artName(p)})`;
+}
+
+async function aufgeben(){
+  const g = aktuellesSpiel;
+  if (!g || !stand || stand.gewinner || stand.phase !== "spiel") return;
+  const meinSitz = sitz(g.id);
+  if (meinSitz !== 1 && meinSitz !== 2) return;
+  const sieger = meinSitz === 1 ? 2 : 1;
+  const p = turnierZeitWertung(stand, sieger);
+  const wem = g.training ? "den Computer" : nameOf(spielerVon(g, sieger));
+  const wofuer = g.turnier_match ? " fürs Turnier-Match" : g.training ? "" : " für die Liga";
+  const ok = await dialog("Aufgeben?", `Das Spiel geht an ${wem} — als ${artName(p)}, also ${p} ${p === 1 ? "Punkt" : "Punkte"}${wofuer}.`,
+    [{ text: "Ja, aufgeben", wert: true, art: "gefahr" }, { text: "Weiterspielen", wert: false, art: "leise" }]);
+  if (!ok || aktuellesSpiel !== g || !stand || stand.gewinner) return;
+  const punkte = turnierZeitWertung(stand, sieger);               // falls sich die Stellung inzwischen geändert hat
+  stand = klon(stand);
+  stand.gewinner = sieger; stand.art = punkte; stand.aufgegeben = meinSitz; stand.zug = null;
+  verlauf = []; zugListe = []; gewaehlt = null; vorschauAktiv = false;
+  await partieAbschliessen();
+  if (!g.training) aufgabeAbsichern(g.id, sieger, punkte, meinSitz);
+}
+
+// Hat die Gegenseite im selben Moment gezogen, könnte ihr Stand die Aufgabe überschrieben haben: nachprüfen
+async function aufgabeAbsichern(spielId, sieger, punkte, wer){
+  for (let versuch = 0; versuch < 3; versuch++){
+    await new Promise(r => setTimeout(r, 4000));
+    try {
+      const r = await withTimeout(db.from("games").select("*").eq("id", spielId));
+      const row = r && r.data && r.data[0];
+      if (!row || (row.status === "fertig" && row.state && row.state.gewinner === sieger)) return;
+      const st = { ...row.state, gewinner: sieger, art: punkte, aufgegeben: wer, zug: null, v: Math.max(versionGesehen, (row.state && row.state.v) || 0) + 1 };
+      versionGesehen = st.v;
+      await withTimeout(db.from("games").update({ state: st, status: "fertig", updated_at: new Date().toISOString() }).eq("id", spielId));
+    } catch (e) {}
+  }
 }
 
 // Letzten Zug im Spielstand festhalten — für alle, die zeitversetzt spielen
@@ -4943,16 +5010,64 @@ function sitzFragen(g){
 }
 
 async function frischerStand(){
+  const gefragt = aktuellesSpiel && aktuellesSpiel.id;
+  if (!gefragt) return null;
   try {
-    const r = await withTimeout(db.from("games").select("*").eq("id", aktuellesSpiel.id));
+    const r = await withTimeout(db.from("games").select("*").eq("id", gefragt));
+    if (!aktuellesSpiel || aktuellesSpiel.id !== gefragt) return null;
     if (!r.error && r.data && r.data[0]){ versionMerken(r.data[0].state); return r.data[0].state; }
   } catch (e) {}
   return null;
 }
 
 // Eröffnungswurf: beide schreiben in dieselbe Zeile, deshalb auf frischem Stand aufsetzen
+// Eröffnungswurf: Die Datenbank trägt den Würfel selbst ein (Funktion eroeffnung_wurf).
+// Gleichzeitige Würfe werden nacheinander verbucht, ein wiederholt gesendeter Wurf zählt nur einmal.
+let eroeffnungUnterwegs = false;
 async function eroeffnungSenden(meinSitz){
   const augen = 1 + Math.floor(Math.random() * 6);
+  const runde = (stand && stand.erstRunde) || 0;
+  const spielId = aktuellesSpiel.id;
+  let ergebnis = null, ohneFunktion = typeof db.rpc !== "function";
+  if (ohneFunktion) return eroeffnungSendenAlt(meinSitz, augen);
+  eroeffnungUnterwegs = true; brettZeichnen();
+  for (let versuch = 0; versuch < 6 && !ergebnis; versuch++){
+    try {
+      const r = await withTimeout(db.rpc("eroeffnung_wurf", { p_spiel: spielId, p_sitz: meinSitz, p_augen: augen, p_runde: runde }), 10000);
+      if (r && r.error){
+        const m = (r.error.message || "") + " " + (r.error.code || "");
+        if (/PGRST202|could not find the function|eroeffnung_wurf/i.test(m)){ ohneFunktion = true; break; }
+        throw new Error(m);
+      }
+      ergebnis = r && r.data;
+      if (!ergebnis) throw new Error("keine Antwort");
+    } catch (e) {
+      $("boardHinweis").textContent = "Schlechte Verbindung — dein Wurf wird noch einmal gesendet …";
+      await new Promise(res => setTimeout(res, 1200 * (versuch + 1)));
+    }
+    if (!aktuellesSpiel || aktuellesSpiel.id !== spielId){ eroeffnungUnterwegs = false; return; }
+  }
+  eroeffnungUnterwegs = false;
+  if (ohneFunktion) return eroeffnungSendenAlt(meinSitz, augen);
+  if (!ergebnis){
+    brettZeichnen();
+    $("boardHinweis").textContent = "Dein Wurf ist nicht angekommen. Bitte noch einmal tippen — doppelt zählen kann er nicht.";
+    return;
+  }
+  if (!istVeraltet(ergebnis)){ stand = ergebnis; versionMerken(stand); }
+  brettZeichnen();
+  const g = aktuellesSpiel, gegenueber = gegnerVon(g, meinSitz), ichName = nameOf(spielerVon(g, meinSitz));
+  const neueRunde = (ergebnis.erstRunde || 0) > runde;
+  if (ergebnis.phase === "spiel" && ergebnis.turn !== meinSitz)
+    benachrichtigen(gegenueber, "Du beginnst", `Eröffnungswurf gewonnen gegen ${ichName} — du bist dran.`, g.id);
+  else if (neueRunde)
+    benachrichtigen(gegenueber, "Gleich hoch", `Eröffnung gegen ${ichName} unentschieden — bitte noch einmal werfen.`, g.id);
+  else if (ergebnis.phase === "eroeffnung" && ergebnis.erst && ergebnis.erst[meinSitz === 1 ? 2 : 1] == null)
+    benachrichtigen(gegenueber, "Eröffnungswurf", `${ichName} hat geworfen — jetzt du.`, g.id);
+}
+
+// Bisheriger Weg (falls die Datenbankfunktion noch fehlt)
+async function eroeffnungSendenAlt(meinSitz, augen){
   for (let versuch = 0; versuch < 4; versuch++){
     const basis = (await frischerStand()) || stand;
     if (basis.phase !== "eroeffnung"){ stand = basis; brettZeichnen(); return; }
@@ -4985,10 +5100,14 @@ async function eroeffnungSenden(meinSitz){
 async function abgleichen(){
   if ($("boardView").classList.contains("hidden") || !aktuellesSpiel) return;
   if (eigenerZugLaeuft()) return;   // mitten im eigenen Zug nicht stören
+  const gefragt = aktuellesSpiel.id;
   try {
-    const r = await withTimeout(db.from("games").select("*").eq("id", aktuellesSpiel.id));
+    const r = await withTimeout(db.from("games").select("*").eq("id", gefragt));
+    // Antwort kam zu spät: inzwischen ist eine andere Partie offen
+    if (!aktuellesSpiel || aktuellesSpiel.id !== gefragt || $("boardView").classList.contains("hidden")) return;
     if (!r.error && r.data && r.data[0]){
       const frisch = r.data[0];
+      if (frisch.id !== gefragt) return;
       const anders = JSON.stringify(frisch.state) !== JSON.stringify(stand) || frisch.status !== aktuellesSpiel.status;
       if (anders && !istVeraltet(frisch.state) && !eigenerZugLaeuft(frisch.state && frisch.state.turn, frisch.state)){
         aktuellesSpiel = frisch;
@@ -5307,6 +5426,7 @@ $("undoBtn").onclick = async () => {
 };
 $("endBtn").onclick = zugAbschliessen;
 $("startTraining").onclick = trainingStarten;
+$("aufgebenBtn").onclick = aufgeben;
 $("uhrKnopf1").onclick = () => uhrAktion($("uhrKnopf1").dataset.uhr);
 $("uhrKnopf2").onclick = () => uhrAktion($("uhrKnopf2").dataset.uhr);
 $("turnierWeiter").onclick = () => { if (turnierNaechstes){ const g = turnierNaechstes; if (!games.some(x => x.id === g.id)) games.unshift(g); spielOeffnen(g, { frage: false }); } };
